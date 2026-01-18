@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { userService } from '../../services/user.service';
-import { Loader2, X, User as UserIcon, Mail, Phone, MapPin, Calendar, Users, Network } from 'lucide-react';
+import { Loader2, X, User as UserIcon, Mail, Phone, MapPin, Calendar, Users, Network, ArrowUp } from 'lucide-react';
 import { DirectReferralsList } from './DirectReferralsList';
 import type { User } from '../../types';
 
@@ -184,6 +184,33 @@ export const UserDetailsModal: React.FC<UserDetailsModalProps> = ({
               </div>
             </div>
           </div>
+
+          {/* Referidor (Padre) - Solo mostrar si tiene nivel > 0 */}
+          {user.level > 0 && user.referrer && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-gray-700">
+                <ArrowUp className="h-5 w-5" />
+                Referido por (Padre)
+              </h3>
+              <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-orange-600 font-medium">Referidor</p>
+                    <p className="text-lg font-bold text-orange-800">{user.referrer.nombre_completo}</p>
+                    <p className="text-sm text-orange-700">CC: {user.referrer.cedula}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewUser(user.referrer!.id)}
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100"
+                  >
+                    Ver Perfil
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Red de Referidos */}
           <div>

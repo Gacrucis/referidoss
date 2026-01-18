@@ -85,4 +85,15 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/toggle-active', [LeaderController::class, 'toggleActive']); // Activar/Desactivar
         Route::post('/{id}/change-password', [LeaderController::class, 'changePassword']); // Cambiar contraseña
     });
+
+    // ============================================
+    // Gestión de TODOS los Usuarios (Solo Super Admin)
+    // ============================================
+    Route::prefix('admin/users')->group(function () {
+        Route::get('/', [UserController::class, 'adminIndex']);              // Listar todos los usuarios
+        Route::get('/search', [UserController::class, 'searchForSelect']);   // Buscar para selector
+        Route::put('/{id}', [UserController::class, 'adminUpdate']);         // Actualizar completo
+        Route::delete('/{id}', [UserController::class, 'adminDestroy']);     // Eliminar con opciones
+        Route::post('/{id}/move', [UserController::class, 'moveUser']);      // Mover a otro referidor
+    });
 });

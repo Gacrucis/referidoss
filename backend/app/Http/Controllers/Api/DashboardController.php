@@ -66,18 +66,18 @@ class DashboardController extends Controller
     public function getGrowthData(Request $request)
     {
         $user = $request->user();
-        $days = $request->get('days', 30);
+        // Validar y sanitizar el parámetro days para prevenir SQL injection
+        $days = max(1, min((int)$request->get('days', 30), 365));
 
         if ($user->isSuperAdmin()) {
-            // Crecimiento global
-            $growth = DB::select("
-                SELECT DATE(created_at) as date, COUNT(*) as count
-                FROM users
-                WHERE created_at >= NOW() - INTERVAL '{$days} days'
-                AND deleted_at IS NULL
-                GROUP BY DATE(created_at)
-                ORDER BY date
-            ");
+            // Crecimiento global - usar query builder para mayor seguridad
+            $growth = User::selectRaw('DATE(created_at) as date, COUNT(*) as count')
+                ->where('created_at', '>=', now()->subDays($days))
+                ->whereNull('deleted_at')
+                ->groupByRaw('DATE(created_at)')
+                ->orderBy('date')
+                ->get()
+                ->toArray();
         } else {
             // Crecimiento de mi red
             $growth = $user->getGrowthByDate($days);

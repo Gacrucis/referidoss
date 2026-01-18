@@ -66,6 +66,13 @@ class UserController extends Controller
             ], 403);
         }
 
+        // Verificar que el usuario esté activo
+        if (!$authUser->is_active) {
+            return response()->json([
+                'error' => 'Tu cuenta está desactivada. No puedes crear referidos.'
+            ], 403);
+        }
+
         $validated = $request->validate([
             'cedula' => 'required|string|unique:users,cedula',
             'primer_nombre' => 'required|string|max:100',
@@ -256,6 +263,10 @@ class UserController extends Controller
             fputcsv($file, [
                 'ID',
                 'Cédula',
+                'Primer Nombre',
+                'Segundo Nombre',
+                'Primer Apellido',
+                'Segundo Apellido',
                 'Nombre Completo',
                 'Celular',
                 'Email',
@@ -279,6 +290,10 @@ class UserController extends Controller
                 fputcsv($file, [
                     $user->id,
                     $user->cedula,
+                    $user->primer_nombre ?? '',
+                    $user->segundo_nombre ?? '',
+                    $user->primer_apellido ?? '',
+                    $user->segundo_apellido ?? '',
                     $user->nombre_completo,
                     $user->celular,
                     $user->email ?? 'N/A',
@@ -302,6 +317,307 @@ class UserController extends Controller
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    /**
+     * Listar usuarios para gestión
+     * Super Admin: ve todos los usuarios
+     * Líder: ve solo su red de referidos
+     */
+    public function adminIndex(Request $request)
+    {
+        $authUser = $request->user();
+
+        // Solo super admin y líderes pueden acceder
+        if (!$authUser->isSuperAdmin() && !$authUser->isLeader()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $query = User::with('referrer:id,nombre_completo,cedula');
+
+        // Si es líder, solo puede ver su red
+        if ($authUser->isLeader()) {
+            $query->whereRaw("path <@ ?", [$authUser->path])
+                  ->where('id', '!=', $authUser->id);
+        }
+
+        // Filtros
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('cedula', 'like', "%{$search}%")
+                  ->orWhere('nombre_completo', 'like', "%{$search}%")
+                  ->orWhere('celular', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->has('role')) {
+            $query->where('role', $request->role);
+        }
+
+        if ($request->has('is_active')) {
+            $query->where('is_active', $request->boolean('is_active'));
+        }
+
+        if ($request->has('departamento')) {
+            $query->where('departamento_votacion', $request->departamento);
+        }
+
+        if ($request->has('municipio')) {
+            $query->where('municipio_votacion', $request->municipio);
+        }
+
+        // Ordenamiento
+        $orderBy = $request->get('order_by', 'created_at');
+        $orderDirection = $request->get('order_direction', 'desc');
+        $query->orderBy($orderBy, $orderDirection);
+
+        $users = $query->paginate($request->get('per_page', 20));
+
+        return response()->json($users);
+    }
+
+    /**
+     * Mover usuario a otro referidor (Solo Super Admin)
+     * Reconstruye el path jerárquico
+     */
+    public function moveUser(Request $request, $id)
+    {
+        if (!$request->user()->isSuperAdmin()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $validated = $request->validate([
+            'new_referrer_id' => 'required|exists:users,id',
+        ]);
+
+        $user = User::findOrFail($id);
+        $newReferrer = User::findOrFail($validated['new_referrer_id']);
+
+        // Validar que no se mueva a sí mismo
+        if ($user->id === $newReferrer->id) {
+            return response()->json([
+                'error' => 'No puedes mover un usuario a sí mismo'
+            ], 422);
+        }
+
+        // Validar que el nuevo referidor no sea un descendiente del usuario
+        $descendants = $user->getAllDescendants()->pluck('id')->toArray();
+        if (in_array($newReferrer->id, $descendants)) {
+            return response()->json([
+                'error' => 'No puedes mover un usuario a uno de sus propios descendientes'
+            ], 422);
+        }
+
+        // Guardar el referidor anterior para actualizar estadísticas
+        $oldReferrerId = $user->referrer_id;
+
+        // Decrementar estadísticas del referidor anterior
+        if ($oldReferrerId) {
+            $user->decrementReferrerStats();
+        }
+
+        // Actualizar el referidor
+        $user->referrer_id = $newReferrer->id;
+        $user->save();
+
+        // Reconstruir el path
+        $user->updatePath();
+
+        // Actualizar paths de todos los descendientes
+        $this->rebuildDescendantPaths($user);
+
+        // Incrementar estadísticas del nuevo referidor
+        $user->updateReferrerStats();
+
+        // Recargar el usuario con relaciones
+        $user->load('referrer:id,nombre_completo,cedula');
+
+        return response()->json([
+            'message' => 'Usuario movido exitosamente',
+            'user' => $user
+        ]);
+    }
+
+    /**
+     * Reconstruir paths de descendientes recursivamente
+     */
+    private function rebuildDescendantPaths(User $parent): void
+    {
+        $directChildren = User::where('referrer_id', $parent->id)->get();
+
+        foreach ($directChildren as $child) {
+            $child->updatePath();
+            $this->rebuildDescendantPaths($child);
+        }
+    }
+
+    /**
+     * Actualizar usuario completo
+     * Super Admin: puede cambiar cualquier campo incluyendo rol y estado
+     * Líder: puede editar datos básicos de usuarios de su red (no rol ni estado)
+     */
+    public function adminUpdate(Request $request, $id)
+    {
+        $authUser = $request->user();
+
+        // Solo super admin y líderes pueden acceder
+        if (!$authUser->isSuperAdmin() && !$authUser->isLeader()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $user = User::findOrFail($id);
+
+        // No permitir editar al propio super admin principal
+        if ($user->id === 1) {
+            return response()->json([
+                'error' => 'No puedes modificar al super admin principal'
+            ], 422);
+        }
+
+        // Si es líder, verificar que el usuario pertenezca a su red
+        if ($authUser->isLeader()) {
+            $descendants = $authUser->getAllDescendants()->pluck('id')->toArray();
+            if (!in_array($user->id, $descendants)) {
+                return response()->json(['error' => 'No autorizado - usuario no pertenece a tu red'], 403);
+            }
+        }
+
+        // Validaciones base (datos que cualquiera puede editar)
+        $baseRules = [
+            'primer_nombre' => 'sometimes|string|max:100',
+            'segundo_nombre' => 'sometimes|nullable|string|max:100',
+            'primer_apellido' => 'sometimes|string|max:100',
+            'segundo_apellido' => 'sometimes|nullable|string|max:100',
+            'nombre_completo' => 'sometimes|string|max:255',
+            'celular' => 'sometimes|string|max:20',
+            'barrio' => 'sometimes|string|max:255',
+            'departamento_votacion' => 'sometimes|string|max:255',
+            'municipio_votacion' => 'sometimes|string|max:255',
+            'puesto_votacion' => 'sometimes|string|max:255',
+            'direccion_votacion' => 'sometimes|string|max:255',
+            'mesa_votacion' => 'sometimes|string|max:50',
+            'observaciones' => 'nullable|string',
+        ];
+
+        // Solo super admin puede cambiar estos campos
+        if ($authUser->isSuperAdmin()) {
+            $baseRules['email'] = 'sometimes|nullable|email';
+            $baseRules['role'] = 'sometimes|in:leader,member';
+            $baseRules['is_active'] = 'sometimes|boolean';
+        }
+
+        $validated = $request->validate($baseRules);
+
+        $user->update($validated);
+
+        // Recargar con relaciones
+        $user->load('referrer:id,nombre_completo,cedula');
+
+        return response()->json([
+            'message' => 'Usuario actualizado exitosamente',
+            'user' => $user
+        ]);
+    }
+
+    /**
+     * Eliminar usuario permanentemente o con toda su red
+     * Super Admin: puede eliminar cualquier usuario (excepto super admins)
+     * Líder: puede eliminar usuarios de su red
+     */
+    public function adminDestroy(Request $request, $id)
+    {
+        $authUser = $request->user();
+
+        // Solo super admin y líderes pueden acceder
+        if (!$authUser->isSuperAdmin() && !$authUser->isLeader()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $user = User::findOrFail($id);
+
+        // No permitir eliminar al super admin principal
+        if ($user->id === 1 || $user->role === 'super_admin') {
+            return response()->json([
+                'error' => 'No puedes eliminar a un super admin'
+            ], 422);
+        }
+
+        // No permitir eliminar líderes (solo super admin puede)
+        if ($user->role === 'leader' && !$authUser->isSuperAdmin()) {
+            return response()->json([
+                'error' => 'Solo el super admin puede eliminar líderes'
+            ], 403);
+        }
+
+        // Si es líder, verificar que el usuario pertenezca a su red
+        if ($authUser->isLeader()) {
+            $descendants = $authUser->getAllDescendants()->pluck('id')->toArray();
+            if (!in_array($user->id, $descendants)) {
+                return response()->json(['error' => 'No autorizado - usuario no pertenece a tu red'], 403);
+            }
+        }
+
+        $deleteNetwork = $request->boolean('delete_network', false);
+
+        if ($deleteNetwork) {
+            // Eliminar toda la red del usuario
+            $descendants = $user->getAllDescendants();
+            foreach ($descendants as $descendant) {
+                $descendant->delete();
+            }
+        } else {
+            // Reasignar hijos al referidor del usuario eliminado
+            $children = User::where('referrer_id', $user->id)->get();
+            foreach ($children as $child) {
+                $child->referrer_id = $user->referrer_id;
+                $child->save();
+                $child->updatePath();
+                $this->rebuildDescendantPaths($child);
+            }
+        }
+
+        $user->delete();
+
+        return response()->json([
+            'message' => 'Usuario eliminado exitosamente',
+            'deleted_network' => $deleteNetwork
+        ]);
+    }
+
+    /**
+     * Buscar usuarios para selector (Solo Super Admin)
+     * Útil para el dropdown de mover usuarios
+     */
+    public function searchForSelect(Request $request)
+    {
+        if (!$request->user()->isSuperAdmin()) {
+            return response()->json(['error' => 'No autorizado'], 403);
+        }
+
+        $search = $request->get('search', '');
+        $excludeId = $request->get('exclude_id');
+
+        $query = User::query()
+            ->select('id', 'nombre_completo', 'cedula', 'role', 'level');
+
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('cedula', 'like', "%{$search}%")
+                  ->orWhere('nombre_completo', 'like', "%{$search}%");
+            });
+        }
+
+        if ($excludeId) {
+            $query->where('id', '!=', $excludeId);
+        }
+
+        $users = $query->orderBy('nombre_completo')
+            ->limit(20)
+            ->get();
+
+        return response()->json($users);
     }
 
     /**

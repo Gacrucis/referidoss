@@ -74,12 +74,15 @@ export const ReferralsTable: React.FC<ReferralsTableProps> = ({
         ) : (
           <>
             {/* Table */}
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Cédula</TableHead>
-                    <TableHead>Nombre</TableHead>
+                    <TableHead>Cedula</TableHead>
+                    <TableHead>Primer Nombre</TableHead>
+                    <TableHead>Segundo Nombre</TableHead>
+                    <TableHead>Primer Apellido</TableHead>
+                    <TableHead>Segundo Apellido</TableHead>
                     <TableHead>Celular</TableHead>
                     <TableHead>Municipio</TableHead>
                     <TableHead>Mesa</TableHead>
@@ -93,7 +96,10 @@ export const ReferralsTable: React.FC<ReferralsTableProps> = ({
                   {data.data.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">{user.cedula}</TableCell>
-                      <TableCell>{user.nombre_completo}</TableCell>
+                      <TableCell>{user.primer_nombre || '-'}</TableCell>
+                      <TableCell>{user.segundo_nombre || '-'}</TableCell>
+                      <TableCell>{user.primer_apellido || '-'}</TableCell>
+                      <TableCell>{user.segundo_apellido || '-'}</TableCell>
                       <TableCell>{user.celular}</TableCell>
                       <TableCell className="text-sm">
                         {user.municipio_votacion}

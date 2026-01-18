@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
 class LeaderController extends Controller
@@ -100,8 +99,7 @@ class LeaderController extends Controller
         $validated['role'] = 'leader';
         $validated['is_active'] = true;
 
-        // Hash de la contraseña
-        $validated['password'] = Hash::make($validated['password']);
+        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
 
         $leader = User::create($validated);
 
@@ -169,10 +167,7 @@ class LeaderController extends Controller
             'is_active' => 'sometimes|boolean',
         ]);
 
-        // Hash de la contraseña si se proporciona
-        if (isset($validated['password'])) {
-            $validated['password'] = Hash::make($validated['password']);
-        }
+        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
 
         $leader->update($validated);
 
@@ -250,7 +245,8 @@ class LeaderController extends Controller
             'password' => 'required|string|min:6|confirmed',
         ]);
 
-        $leader->password = Hash::make($validated['password']);
+        // El cast 'hashed' del modelo se encarga de hashear automáticamente
+        $leader->password = $validated['password'];
         $leader->save();
 
         return response()->json([

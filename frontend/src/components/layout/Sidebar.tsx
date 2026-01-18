@@ -10,6 +10,7 @@ import {
   UserCog,
   UserCircle,
   X,
+  Settings,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 
@@ -41,10 +42,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       roles: ['super_admin', 'leader', 'member'],
     },
     {
-      title: 'Gestión de Líderes',
+      title: 'Gestion de Lideres',
       icon: UserCog,
       href: '/leaders',
       roles: ['super_admin'],
+    },
+    {
+      title: 'Gestion de Usuarios',
+      icon: Settings,
+      href: '/admin/users',
+      roles: ['super_admin', 'leader'],
     },
     {
       title: 'Mi Perfil',

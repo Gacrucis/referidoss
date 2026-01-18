@@ -3,12 +3,22 @@
 // ============================================
 export type UserRole = 'super_admin' | 'leader' | 'member';
 
+export interface UserBasicInfo {
+  id: number;
+  nombre_completo: string;
+  cedula: string;
+}
+
 export interface User {
   id: number;
   email: string | null;
   role: UserRole;
   cedula: string;
   nombre_completo: string;
+  primer_nombre: string | null;
+  segundo_nombre: string | null;
+  primer_apellido: string | null;
+  segundo_apellido: string | null;
   celular: string;
   barrio: string;
   departamento_votacion: string;
@@ -26,6 +36,9 @@ export interface User {
   total_network_count: number;
   created_at: string;
   updated_at: string;
+  // Relaciones cargadas opcionalmente
+  referrer?: UserBasicInfo | null;
+  direct_referrals?: UserBasicInfo[];
 }
 
 export interface AuthUser {

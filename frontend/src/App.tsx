@@ -9,6 +9,7 @@ import { LeadersPage } from './pages/LeadersPage';
 import { TreePage } from './pages/TreePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { PublicRegisterPage } from './pages/PublicRegisterPage';
+import { AdminUsersPage } from './pages/AdminUsersPage';
 
 function App() {
   return (
@@ -59,6 +60,17 @@ function App() {
               <ProtectedRoute allowedRoles={['super_admin']}>
                 <Layout>
                   <LeadersPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/users"
+            element={
+              <ProtectedRoute allowedRoles={['super_admin', 'leader']}>
+                <Layout>
+                  <AdminUsersPage />
                 </Layout>
               </ProtectedRoute>
             }
