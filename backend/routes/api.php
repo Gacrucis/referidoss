@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LeaderController;
+use App\Http\Controllers\Api\LineaController;
+use App\Http\Controllers\Api\OkController;
 use App\Http\Controllers\Api\TreeController;
 use App\Http\Controllers\Api\UserController;
 use Illuminate\Support\Facades\Route;
@@ -95,5 +97,29 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/{id}', [UserController::class, 'adminUpdate']);         // Actualizar completo
         Route::delete('/{id}', [UserController::class, 'adminDestroy']);     // Eliminar con opciones
         Route::post('/{id}/move', [UserController::class, 'moveUser']);      // Mover a otro referidor
+    });
+
+    // ============================================
+    // ADN - Gestión de Líneas (Solo Super Admin)
+    // ============================================
+    Route::prefix('adn/lineas')->group(function () {
+        Route::get('/', [LineaController::class, 'index']);           // Listar líneas
+        Route::get('/active', [LineaController::class, 'getActive']); // Líneas activas (para selects)
+        Route::post('/', [LineaController::class, 'store']);          // Crear línea
+        Route::get('/{id}', [LineaController::class, 'show']);        // Ver detalle
+        Route::put('/{id}', [LineaController::class, 'update']);      // Actualizar línea
+        Route::delete('/{id}', [LineaController::class, 'destroy']);  // Eliminar línea
+    });
+
+    // ============================================
+    // ADN - Gestión de OKs (Solo Super Admin)
+    // ============================================
+    Route::prefix('adn/oks')->group(function () {
+        Route::get('/', [OkController::class, 'index']);           // Listar OKs
+        Route::get('/active', [OkController::class, 'getActive']); // OKs activos (para selects)
+        Route::post('/', [OkController::class, 'store']);          // Crear OK
+        Route::get('/{id}', [OkController::class, 'show']);        // Ver detalle
+        Route::put('/{id}', [OkController::class, 'update']);      // Actualizar OK
+        Route::delete('/{id}', [OkController::class, 'destroy']);  // Eliminar OK
     });
 });

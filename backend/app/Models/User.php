@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'adn_type',
         'cedula',
         'nombre_completo',
         'primer_nombre',
@@ -410,5 +411,52 @@ class User extends Authenticatable
     public function isMember(): bool
     {
         return $this->role === 'member';
+    }
+
+    /**
+     * Relación: Líneas ADN a las que pertenece el usuario
+     */
+    public function lineas()
+    {
+        return $this->belongsToMany(Linea::class, 'linea_user')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Relación: OKs ADN a los que pertenece el usuario
+     */
+    public function oks()
+    {
+        return $this->belongsToMany(Ok::class, 'ok_user')
+                    ->withTimestamps();
+    }
+
+    /**
+     * Verificar si puede asignar líneas (no tiene OKs)
+     */
+    public function canAssignLineas(): bool
+    {
+        return $this->oks()->count() === 0;
+    }
+
+    /**
+     * Verificar si puede asignar OKs (no tiene líneas)
+     */
+    public function canAssignOks(): bool
+    {
+        return $this->lineas()->count() === 0;
+    }
+
+    /**
+     * Obtener categorías ADN asignadas (líneas u OKs)
+     */
+    public function getAdnCategories()
+    {
+        if ($this->adn_type === 'linea') {
+            return $this->lineas;
+        } elseif ($this->adn_type === 'ok') {
+            return $this->oks;
+        }
+        return collect([]);
     }
 }

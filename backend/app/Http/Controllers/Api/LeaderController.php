@@ -42,6 +42,9 @@ class LeaderController extends Controller
         $orderDirection = $request->get('order_direction', 'desc');
         $query->orderBy($orderBy, $orderDirection);
 
+        // Cargar relaciones ADN
+        $query->with(['lineas:id,nombre,color', 'oks:id,nombre,color']);
+
         $leaders = $query->paginate($request->get('per_page', 15));
 
         // Agregar estadísticas de red a cada líder
@@ -49,12 +52,19 @@ class LeaderController extends Controller
             return [
                 'id' => $leader->id,
                 'nombre_completo' => $leader->nombre_completo,
+                'primer_nombre' => $leader->primer_nombre,
+                'segundo_nombre' => $leader->segundo_nombre,
+                'primer_apellido' => $leader->primer_apellido,
+                'segundo_apellido' => $leader->segundo_apellido,
                 'cedula' => $leader->cedula,
                 'email' => $leader->email,
                 'celular' => $leader->celular,
                 'referral_code' => $leader->referral_code,
                 'level' => $leader->level,
                 'is_active' => $leader->is_active,
+                'adn_type' => $leader->adn_type,
+                'lineas' => $leader->lineas,
+                'oks' => $leader->oks,
                 'direct_referrals_count' => $leader->direct_referrals_count,
                 'total_network_count' => $leader->total_network_count,
                 'created_at' => $leader->created_at->toISOString(),
@@ -81,7 +91,10 @@ class LeaderController extends Controller
 
         $validated = $request->validate([
             'cedula' => 'required|string|unique:users,cedula',
-            'nombre_completo' => 'required|string|max:255',
+            'primer_nombre' => 'required|string|max:100',
+            'segundo_nombre' => 'nullable|string|max:100',
+            'primer_apellido' => 'required|string|max:100',
+            'segundo_apellido' => 'required|string|max:100',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
             'celular' => 'required|string|max:20',
@@ -93,15 +106,46 @@ class LeaderController extends Controller
             'mesa_votacion' => 'required|string|max:50',
             'observaciones' => 'nullable|string',
             'referrer_id' => 'nullable|exists:users,id',
+            // Campos ADN
+            'adn_type' => 'nullable|in:linea,ok',
+            'linea_ids' => 'nullable|array',
+            'linea_ids.*' => 'exists:lineas,id',
+            'ok_ids' => 'nullable|array',
+            'ok_ids.*' => 'exists:oks,id',
         ]);
+
+        // Validar exclusividad mutua de ADN
+        if (!empty($validated['linea_ids']) && !empty($validated['ok_ids'])) {
+            return response()->json([
+                'error' => 'Un líder no puede pertenecer a Líneas y OKs simultáneamente'
+            ], 422);
+        }
 
         // Asignar rol de líder
         $validated['role'] = 'leader';
         $validated['is_active'] = true;
 
-        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
+        // Determinar tipo ADN basado en los IDs proporcionados
+        if (!empty($validated['linea_ids'])) {
+            $validated['adn_type'] = 'linea';
+        } elseif (!empty($validated['ok_ids'])) {
+            $validated['adn_type'] = 'ok';
+        }
 
+        // Extraer IDs de ADN antes de crear
+        $lineaIds = $validated['linea_ids'] ?? [];
+        $okIds = $validated['ok_ids'] ?? [];
+        unset($validated['linea_ids'], $validated['ok_ids']);
+
+        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
         $leader = User::create($validated);
+
+        // Asignar relaciones ADN
+        if (!empty($lineaIds)) {
+            $leader->lineas()->sync($lineaIds);
+        } elseif (!empty($okIds)) {
+            $leader->oks()->sync($okIds);
+        }
 
         return response()->json([
             'message' => 'Líder creado exitosamente',
@@ -112,6 +156,7 @@ class LeaderController extends Controller
                 'email' => $leader->email,
                 'referral_code' => $leader->referral_code,
                 'level' => $leader->level,
+                'adn_type' => $leader->adn_type,
             ]
         ], 201);
     }
@@ -128,8 +173,13 @@ class LeaderController extends Controller
 
         $leader = User::where('role', 'leader')->findOrFail($id);
 
-        // Cargar relaciones
-        $leader->load(['referrer:id,nombre_completo,cedula', 'directReferrals:id,nombre_completo,cedula,role']);
+        // Cargar relaciones incluyendo ADN
+        $leader->load([
+            'referrer:id,nombre_completo,cedula',
+            'directReferrals:id,nombre_completo,cedula,role,celular,municipio_votacion,is_active,direct_referrals_count',
+            'lineas:id,nombre,color',
+            'oks:id,nombre,color'
+        ]);
 
         // Obtener estadísticas de red
         $networkStats = $leader->getNetworkStats();
@@ -153,7 +203,10 @@ class LeaderController extends Controller
         $leader = User::where('role', 'leader')->findOrFail($id);
 
         $validated = $request->validate([
-            'nombre_completo' => 'sometimes|string|max:255',
+            'primer_nombre' => 'sometimes|string|max:100',
+            'segundo_nombre' => 'nullable|string|max:100',
+            'primer_apellido' => 'sometimes|string|max:100',
+            'segundo_apellido' => 'sometimes|string|max:100',
             'email' => ['sometimes', 'email', Rule::unique('users')->ignore($leader->id)],
             'password' => 'sometimes|string|min:6',
             'celular' => 'sometimes|string|max:20',
@@ -165,11 +218,51 @@ class LeaderController extends Controller
             'mesa_votacion' => 'sometimes|string|max:50',
             'observaciones' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
+            // Campos ADN
+            'adn_type' => 'nullable|in:linea,ok',
+            'linea_ids' => 'nullable|array',
+            'linea_ids.*' => 'exists:lineas,id',
+            'ok_ids' => 'nullable|array',
+            'ok_ids.*' => 'exists:oks,id',
         ]);
 
-        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
+        // Validar exclusividad mutua de ADN
+        if (!empty($validated['linea_ids']) && !empty($validated['ok_ids'])) {
+            return response()->json([
+                'error' => 'Un líder no puede pertenecer a Líneas y OKs simultáneamente'
+            ], 422);
+        }
 
+        // Extraer IDs de ADN antes de actualizar
+        $lineaIds = $validated['linea_ids'] ?? null;
+        $okIds = $validated['ok_ids'] ?? null;
+        unset($validated['linea_ids'], $validated['ok_ids']);
+
+        // Determinar tipo ADN basado en los IDs proporcionados
+        if ($lineaIds !== null || $okIds !== null) {
+            if (!empty($lineaIds)) {
+                $validated['adn_type'] = 'linea';
+            } elseif (!empty($okIds)) {
+                $validated['adn_type'] = 'ok';
+            } else {
+                $validated['adn_type'] = null;
+            }
+        }
+
+        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
         $leader->update($validated);
+
+        // Actualizar relaciones ADN si se proporcionaron
+        if ($lineaIds !== null) {
+            $leader->oks()->detach(); // Limpiar OKs
+            $leader->lineas()->sync($lineaIds);
+        } elseif ($okIds !== null) {
+            $leader->lineas()->detach(); // Limpiar líneas
+            $leader->oks()->sync($okIds);
+        }
+
+        // Recargar relaciones
+        $leader->load(['lineas:id,nombre,color', 'oks:id,nombre,color']);
 
         return response()->json([
             'message' => 'Líder actualizado exitosamente',

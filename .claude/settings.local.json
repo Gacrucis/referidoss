@@ -1,6 +1,10 @@
 {
   "permissions": {
-    "allow": [],
+    "allow": [
+      "Bash(more:*)",
+      "Bash(powershell:*)",
+      "Bash(php artisan:*)"
+    ],
     "deny": []
   }
 }
