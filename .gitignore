@@ -1,0 +1,25 @@
+
+# Ignorar todo por defecto
+
+*
+
+
+
+# Permitir el .gitignore
+
+!.gitignore
+
+
+
+# Permitir solo el código
+
+!backend/
+
+!backend/**
+
+
+
+!frontend/
+
+!frontend/**
+
