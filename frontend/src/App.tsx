@@ -10,6 +10,8 @@ import { TreePage } from './pages/TreePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { PublicRegisterPage } from './pages/PublicRegisterPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
+import { AdnLineasPage } from './pages/AdnLineasPage';
+import { AdnOksPage } from './pages/AdnOksPage';
 
 function App() {
   return (
@@ -60,6 +62,28 @@ function App() {
               <ProtectedRoute allowedRoles={['super_admin']}>
                 <Layout>
                   <LeadersPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/adn/lineas"
+            element={
+              <ProtectedRoute allowedRoles={['super_admin']}>
+                <Layout>
+                  <AdnLineasPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/adn/oks"
+            element={
+              <ProtectedRoute allowedRoles={['super_admin']}>
+                <Layout>
+                  <AdnOksPage />
                 </Layout>
               </ProtectedRoute>
             }

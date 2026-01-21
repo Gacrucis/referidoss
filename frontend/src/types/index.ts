@@ -173,11 +173,64 @@ export interface Municipio {
 }
 
 // ============================================
+// ADN - Líneas y OKs
+// ============================================
+export type AdnType = 'linea' | 'ok' | null;
+
+export interface Linea {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  color: string | null;
+  is_active: boolean;
+  leaders_count?: number;
+  total_network?: number;
+  leaders?: User[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Ok {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  color: string | null;
+  is_active: boolean;
+  leaders_count?: number;
+  total_network?: number;
+  leaders?: User[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdnStats {
+  leaders_count: number;
+  active_leaders: number;
+  total_direct_referrals: number;
+  total_network: number;
+}
+
+export interface LineaFormData {
+  nombre: string;
+  descripcion?: string;
+  color?: string;
+}
+
+export interface OkFormData {
+  nombre: string;
+  descripcion?: string;
+  color?: string;
+}
+
+// ============================================
 // Líder (para super admin)
 // ============================================
 export interface LeaderFormData {
   cedula: string;
-  nombre_completo: string;
+  primer_nombre: string;
+  segundo_nombre?: string;
+  primer_apellido: string;
+  segundo_apellido: string;
   email: string;
   password: string;
   celular: string;
@@ -189,6 +242,9 @@ export interface LeaderFormData {
   mesa_votacion: string;
   observaciones?: string;
   referrer_id?: number | null;
+  adn_type?: AdnType;
+  linea_ids?: number[];
+  ok_ids?: number[];
 }
 
 export interface LeaderStats {
@@ -198,4 +254,11 @@ export interface LeaderStats {
   leaders_with_network: number;
   average_network_size: number;
   top_leaders: TopReferrer[];
+}
+
+// Extender User para incluir ADN
+export interface UserWithAdn extends User {
+  adn_type: AdnType;
+  lineas?: Linea[];
+  oks?: Ok[];
 }

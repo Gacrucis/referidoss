@@ -4,11 +4,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
-import { Search, ChevronLeft, ChevronRight, Power, PowerOff, Key, Eye } from 'lucide-react';
-import type { User, PaginatedResponse } from '../../types';
+import { Search, ChevronLeft, ChevronRight, Power, PowerOff, Key, Eye, Edit2, Layers, GitBranch } from 'lucide-react';
+import type { User, PaginatedResponse, Linea, Ok } from '../../types';
 import { leaderService } from '../../services/leader.service';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { LeaderDetailsModal } from './LeaderDetailsModal';
+import { EditLeaderModal } from './EditLeaderModal';
 
 interface LeadersTableProps {
   data: PaginatedResponse<User> | null;
@@ -29,6 +30,7 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
   const [toggling, setToggling] = useState<number | null>(null);
   const [passwordModal, setPasswordModal] = useState<{ id: number; name: string } | null>(null);
   const [detailsModal, setDetailsModal] = useState<{ id: number; name: string } | null>(null);
+  const [editModal, setEditModal] = useState<User | null>(null);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +104,7 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                     <TableHead>Celular</TableHead>
                     <TableHead>Red Directa</TableHead>
                     <TableHead>Red Total</TableHead>
+                    <TableHead>ADN</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Acciones</TableHead>
@@ -125,6 +128,35 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                         <Badge variant="default">
                           {leader.total_network_count}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {(leader as any).lineas?.map((l: Linea) => (
+                            <Badge
+                              key={l.id}
+                              variant="outline"
+                              className="text-xs"
+                              style={{ borderColor: l.color || '#3B82F6', color: l.color || '#3B82F6' }}
+                            >
+                              <Layers className="h-2 w-2 mr-1" />
+                              {l.nombre}
+                            </Badge>
+                          ))}
+                          {(leader as any).oks?.map((o: Ok) => (
+                            <Badge
+                              key={o.id}
+                              variant="outline"
+                              className="text-xs"
+                              style={{ borderColor: o.color || '#10B981', color: o.color || '#10B981' }}
+                            >
+                              <GitBranch className="h-2 w-2 mr-1" />
+                              {o.nombre}
+                            </Badge>
+                          ))}
+                          {!(leader as any).lineas?.length && !(leader as any).oks?.length && (
+                            <span className="text-xs text-gray-400">-</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {leader.is_active ? (
@@ -151,6 +183,14 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                           >
                             <Eye className="h-4 w-4 mr-1" />
                             Ver
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setEditModal(leader)}
+                            title="Editar líder"
+                          >
+                            <Edit2 className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
@@ -237,6 +277,18 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
           onClose={() => setPasswordModal(null)}
           onSuccess={() => {
             setPasswordModal(null);
+            onRefresh();
+          }}
+        />
+      )}
+
+      {/* Edit Leader Modal */}
+      {editModal && (
+        <EditLeaderModal
+          leader={editModal}
+          onClose={() => setEditModal(null)}
+          onSuccess={() => {
+            setEditModal(null);
             onRefresh();
           }}
         />

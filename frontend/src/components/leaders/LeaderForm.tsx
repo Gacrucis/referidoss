@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
+import { Badge } from '../ui/badge';
 import { leaderService } from '../../services/leader.service';
+import { lineaService } from '../../services/linea.service';
+import { okService } from '../../services/ok.service';
 import { departamentos, getMunicipiosByDepartamento } from '../../data/colombia';
-import type { LeaderFormData } from '../../types';
-import { UserCog, Loader2 } from 'lucide-react';
+import type { LeaderFormData, Linea, Ok, AdnType } from '../../types';
+import { UserCog, Loader2, Layers, GitBranch, X } from 'lucide-react';
 
 interface LeaderFormProps {
   onSuccess?: () => void;
@@ -17,7 +20,10 @@ interface LeaderFormProps {
 export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) => {
   const [formData, setFormData] = useState<LeaderFormData>({
     cedula: '',
-    nombre_completo: '',
+    primer_nombre: '',
+    segundo_nombre: '',
+    primer_apellido: '',
+    segundo_apellido: '',
     email: '',
     password: '',
     celular: '',
@@ -28,13 +34,41 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
     direccion_votacion: '',
     mesa_votacion: '',
     observaciones: '',
+    adn_type: null,
+    linea_ids: [],
+    ok_ids: [],
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // Opciones de ADN
+  const [lineas, setLineas] = useState<Linea[]>([]);
+  const [oks, setOks] = useState<Ok[]>([]);
+  const [loadingAdn, setLoadingAdn] = useState(false);
+
   const municipios = getMunicipiosByDepartamento(formData.departamento_votacion);
+
+  // Cargar opciones de ADN al montar
+  useEffect(() => {
+    const loadAdnOptions = async () => {
+      setLoadingAdn(true);
+      try {
+        const [lineasData, oksData] = await Promise.all([
+          lineaService.getActiveLineas(),
+          okService.getActiveOks(),
+        ]);
+        setLineas(lineasData);
+        setOks(oksData);
+      } catch (error) {
+        console.error('Error al cargar opciones ADN:', error);
+      } finally {
+        setLoadingAdn(false);
+      }
+    };
+    loadAdnOptions();
+  }, []);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -45,6 +79,35 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
       [name]: value,
       ...(name === 'departamento_votacion' ? { municipio_votacion: '' } : {}),
     }));
+  };
+
+  const handleAdnTypeChange = (type: AdnType) => {
+    setFormData((prev) => ({
+      ...prev,
+      adn_type: type,
+      linea_ids: type === 'linea' ? prev.linea_ids : [],
+      ok_ids: type === 'ok' ? prev.ok_ids : [],
+    }));
+  };
+
+  const handleLineaToggle = (lineaId: number) => {
+    setFormData((prev) => {
+      const currentIds = prev.linea_ids || [];
+      const newIds = currentIds.includes(lineaId)
+        ? currentIds.filter((id) => id !== lineaId)
+        : [...currentIds, lineaId];
+      return { ...prev, linea_ids: newIds };
+    });
+  };
+
+  const handleOkToggle = (okId: number) => {
+    setFormData((prev) => {
+      const currentIds = prev.ok_ids || [];
+      const newIds = currentIds.includes(okId)
+        ? currentIds.filter((id) => id !== okId)
+        : [...currentIds, okId];
+      return { ...prev, ok_ids: newIds };
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -60,7 +123,10 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
       // Reset form
       setFormData({
         cedula: '',
-        nombre_completo: '',
+        primer_nombre: '',
+        segundo_nombre: '',
+        primer_apellido: '',
+        segundo_apellido: '',
         email: '',
         password: '',
         celular: '',
@@ -71,22 +137,26 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
         direccion_votacion: '',
         mesa_votacion: '',
         observaciones: '',
+        adn_type: null,
+        linea_ids: [],
+        ok_ids: [],
       });
 
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1500);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string; error?: string; errors?: Record<string, string[]> } } };
       const errorMessage =
-        err.response?.data?.message ||
-        err.response?.data?.errors ||
-        'Error al crear el líder';
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.response?.data?.errors;
 
-      if (typeof errorMessage === 'object') {
+      if (typeof errorMessage === 'object' && errorMessage !== null) {
         const errors = Object.values(errorMessage).flat().join(', ');
         setError(errors);
       } else {
-        setError(errorMessage);
+        setError(errorMessage || 'Error al crear el líder');
       }
     } finally {
       setLoading(false);
@@ -153,7 +223,7 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
             </div>
           </div>
 
-          {/* Información Personal */}
+          {/* Información Personal - Nombres separados */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold">Información Personal</h3>
             <div className="grid gap-4 md:grid-cols-2">
@@ -165,19 +235,6 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
                   value={formData.cedula}
                   onChange={handleChange}
                   placeholder="1234567890"
-                  required
-                  disabled={loading}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="nombre_completo">Nombre Completo *</Label>
-                <Input
-                  id="nombre_completo"
-                  name="nombre_completo"
-                  value={formData.nombre_completo}
-                  onChange={handleChange}
-                  placeholder="Juan Pérez García"
                   required
                   disabled={loading}
                 />
@@ -197,6 +254,57 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="primer_nombre">Primer Nombre *</Label>
+                <Input
+                  id="primer_nombre"
+                  name="primer_nombre"
+                  value={formData.primer_nombre}
+                  onChange={handleChange}
+                  placeholder="Juan"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="segundo_nombre">Segundo Nombre</Label>
+                <Input
+                  id="segundo_nombre"
+                  name="segundo_nombre"
+                  value={formData.segundo_nombre || ''}
+                  onChange={handleChange}
+                  placeholder="Carlos"
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="primer_apellido">Primer Apellido *</Label>
+                <Input
+                  id="primer_apellido"
+                  name="primer_apellido"
+                  value={formData.primer_apellido}
+                  onChange={handleChange}
+                  placeholder="Pérez"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="segundo_apellido">Segundo Apellido *</Label>
+                <Input
+                  id="segundo_apellido"
+                  name="segundo_apellido"
+                  value={formData.segundo_apellido}
+                  onChange={handleChange}
+                  placeholder="García"
+                  required
+                  disabled={loading}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="barrio">Barrio *</Label>
                 <Input
                   id="barrio"
@@ -209,6 +317,147 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
                 />
               </div>
             </div>
+          </div>
+
+          {/* Clasificación ADN */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold">Clasificación ADN</h3>
+            <p className="text-xs text-gray-500">
+              Selecciona el tipo de clasificación (opcional). Un líder puede pertenecer a Líneas O a OKs, pero no a ambos.
+            </p>
+
+            {/* Radio buttons para tipo */}
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="adn_type"
+                  checked={formData.adn_type === null}
+                  onChange={() => handleAdnTypeChange(null)}
+                  disabled={loading}
+                  className="w-4 h-4 text-gray-600"
+                />
+                <span className="text-sm">Sin ADN</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="adn_type"
+                  checked={formData.adn_type === 'linea'}
+                  onChange={() => handleAdnTypeChange('linea')}
+                  disabled={loading || lineas.length === 0}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <Layers className="h-4 w-4 text-blue-600" />
+                <span className="text-sm">Líneas</span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="adn_type"
+                  checked={formData.adn_type === 'ok'}
+                  onChange={() => handleAdnTypeChange('ok')}
+                  disabled={loading || oks.length === 0}
+                  className="w-4 h-4 text-green-600"
+                />
+                <GitBranch className="h-4 w-4 text-green-600" />
+                <span className="text-sm">OKs</span>
+              </label>
+            </div>
+
+            {/* Selector de Líneas */}
+            {formData.adn_type === 'linea' && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <Label className="text-blue-800 mb-2 block">Selecciona Líneas:</Label>
+                {loadingAdn ? (
+                  <div className="flex items-center gap-2 text-sm text-blue-600">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Cargando...
+                  </div>
+                ) : lineas.length === 0 ? (
+                  <p className="text-sm text-blue-600">No hay líneas disponibles</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {lineas.map((linea) => {
+                      const isSelected = formData.linea_ids?.includes(linea.id);
+                      return (
+                        <button
+                          key={linea.id}
+                          type="button"
+                          onClick={() => handleLineaToggle(linea.id)}
+                          disabled={loading}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            isSelected
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: linea.color || '#3B82F6' }}
+                          />
+                          {linea.nombre}
+                          {isSelected && <X className="h-3 w-3" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {(formData.linea_ids?.length || 0) > 0 && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    {formData.linea_ids?.length} línea(s) seleccionada(s)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Selector de OKs */}
+            {formData.adn_type === 'ok' && (
+              <div className="p-4 bg-green-50 rounded-lg border border-green-200">
+                <Label className="text-green-800 mb-2 block">Selecciona OKs:</Label>
+                {loadingAdn ? (
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Cargando...
+                  </div>
+                ) : oks.length === 0 ? (
+                  <p className="text-sm text-green-600">No hay OKs disponibles</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {oks.map((ok) => {
+                      const isSelected = formData.ok_ids?.includes(ok.id);
+                      return (
+                        <button
+                          key={ok.id}
+                          type="button"
+                          onClick={() => handleOkToggle(ok.id)}
+                          disabled={loading}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                            isSelected
+                              ? 'bg-green-600 text-white'
+                              : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: ok.color || '#10B981' }}
+                          />
+                          {ok.nombre}
+                          {isSelected && <X className="h-3 w-3" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {(formData.ok_ids?.length || 0) > 0 && (
+                  <p className="text-xs text-green-600 mt-2">
+                    {formData.ok_ids?.length} OK(s) seleccionado(s)
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Información de Votación */}
