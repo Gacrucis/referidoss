@@ -6,23 +6,21 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\DB;
 
 class LeaderController extends Controller
 {
     /**
      * Listar todos los líderes
-     * Solo super admin puede acceder
      */
     public function index(Request $request)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
         $query = User::where('role', 'leader');
 
-        // Filtros
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function($q) use ($search) {
@@ -37,17 +35,14 @@ class LeaderController extends Controller
             $query->where('is_active', $request->boolean('is_active'));
         }
 
-        // Ordenar por red más grande por defecto
         $orderBy = $request->get('order_by', 'total_network_count');
         $orderDirection = $request->get('order_direction', 'desc');
         $query->orderBy($orderBy, $orderDirection);
 
-        // Cargar relaciones ADN
-        $query->with(['lineas:id,nombre,color', 'oks:id,nombre,color']);
+        $query->with(['lineas:id,nombre,color', 'oks:id,nombre,color', 'referrer:id,nombre_completo']);
 
         $leaders = $query->paginate($request->get('per_page', 15));
 
-        // Agregar estadísticas de red a cada líder
         $leaders->getCollection()->transform(function($leader) {
             return [
                 'id' => $leader->id,
@@ -68,10 +63,7 @@ class LeaderController extends Controller
                 'direct_referrals_count' => $leader->direct_referrals_count,
                 'total_network_count' => $leader->total_network_count,
                 'created_at' => $leader->created_at->toISOString(),
-                'referrer' => $leader->referrer ? [
-                    'id' => $leader->referrer->id,
-                    'nombre_completo' => $leader->referrer->nombre_completo,
-                ] : null,
+                'referrer' => $leader->referrer,
             ];
         });
 
@@ -80,11 +72,9 @@ class LeaderController extends Controller
 
     /**
      * Crear nuevo líder
-     * Solo super admin puede acceder
      */
     public function store(Request $request)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
@@ -106,96 +96,43 @@ class LeaderController extends Controller
             'mesa_votacion' => 'required|string|max:50',
             'observaciones' => 'nullable|string',
             'referrer_id' => 'nullable|exists:users,id',
-            // Campos ADN
-            'adn_type' => 'nullable|in:linea,ok',
             'linea_ids' => 'nullable|array',
             'linea_ids.*' => 'exists:lineas,id',
             'ok_ids' => 'nullable|array',
             'ok_ids.*' => 'exists:oks,id',
         ]);
 
-        // Validar exclusividad mutua de ADN
         if (!empty($validated['linea_ids']) && !empty($validated['ok_ids'])) {
-            return response()->json([
-                'error' => 'Un líder no puede pertenecer a Líneas y OKs simultáneamente'
-            ], 422);
+            return response()->json(['error' => 'Un líder no puede pertenecer a Líneas y OKs simultáneamente'], 422);
         }
 
-        // Asignar rol de líder
-        $validated['role'] = 'leader';
-        $validated['is_active'] = true;
+        return DB::transaction(function () use ($validated) {
+            $lineaIds = $validated['linea_ids'] ?? [];
+            $okIds = $validated['ok_ids'] ?? [];
+            
+            $validated['role'] = 'leader';
+            $validated['is_active'] = true;
+            $validated['adn_type'] = !empty($lineaIds) ? 'linea' : (!empty($okIds) ? 'ok' : null);
 
-        // Determinar tipo ADN basado en los IDs proporcionados
-        if (!empty($validated['linea_ids'])) {
-            $validated['adn_type'] = 'linea';
-        } elseif (!empty($validated['ok_ids'])) {
-            $validated['adn_type'] = 'ok';
-        }
+            unset($validated['linea_ids'], $validated['ok_ids']);
 
-        // Extraer IDs de ADN antes de crear
-        $lineaIds = $validated['linea_ids'] ?? [];
-        $okIds = $validated['ok_ids'] ?? [];
-        unset($validated['linea_ids'], $validated['ok_ids']);
+            $leader = User::create($validated);
 
-        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
-        $leader = User::create($validated);
+            if ($validated['adn_type'] === 'linea') {
+                $leader->lineas()->sync($lineaIds);
+            } elseif ($validated['adn_type'] === 'ok') {
+                $leader->oks()->sync($okIds);
+            }
 
-        // Asignar relaciones ADN
-        if (!empty($lineaIds)) {
-            $leader->lineas()->sync($lineaIds);
-        } elseif (!empty($okIds)) {
-            $leader->oks()->sync($okIds);
-        }
-
-        return response()->json([
-            'message' => 'Líder creado exitosamente',
-            'leader' => [
-                'id' => $leader->id,
-                'nombre_completo' => $leader->nombre_completo,
-                'cedula' => $leader->cedula,
-                'email' => $leader->email,
-                'referral_code' => $leader->referral_code,
-                'level' => $leader->level,
-                'adn_type' => $leader->adn_type,
-            ]
-        ], 201);
+            return response()->json(['message' => 'Líder creado exitosamente', 'leader' => $leader], 201);
+        });
     }
 
     /**
-     * Mostrar detalle de un líder específico
-     */
-    public function show(Request $request, $id)
-    {
-        // Verificar que sea super admin
-        if (!$request->user()->isSuperAdmin()) {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $leader = User::where('role', 'leader')->findOrFail($id);
-
-        // Cargar relaciones incluyendo ADN
-        $leader->load([
-            'referrer:id,nombre_completo,cedula',
-            'directReferrals:id,nombre_completo,cedula,role,celular,municipio_votacion,is_active,direct_referrals_count',
-            'lineas:id,nombre,color',
-            'oks:id,nombre,color'
-        ]);
-
-        // Obtener estadísticas de red
-        $networkStats = $leader->getNetworkStats();
-
-        return response()->json([
-            'leader' => $leader,
-            'network_stats' => $networkStats,
-        ]);
-    }
-
-    /**
-     * Actualizar información de un líder
+     * Actualizar información de un líder (CORREGIDO)
      */
     public function update(Request $request, $id)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
@@ -218,55 +155,73 @@ class LeaderController extends Controller
             'mesa_votacion' => 'sometimes|string|max:50',
             'observaciones' => 'nullable|string',
             'is_active' => 'sometimes|boolean',
-            // Campos ADN
-            'adn_type' => 'nullable|in:linea,ok',
             'linea_ids' => 'nullable|array',
             'linea_ids.*' => 'exists:lineas,id',
             'ok_ids' => 'nullable|array',
             'ok_ids.*' => 'exists:oks,id',
         ]);
 
-        // Validar exclusividad mutua de ADN
-        if (!empty($validated['linea_ids']) && !empty($validated['ok_ids'])) {
-            return response()->json([
-                'error' => 'Un líder no puede pertenecer a Líneas y OKs simultáneamente'
-            ], 422);
+        // Validación de exclusividad
+        if (!empty($request->linea_ids) && !empty($request->ok_ids)) {
+            return response()->json(['error' => 'No puede tener Líneas y OKs simultáneamente'], 422);
         }
 
-        // Extraer IDs de ADN antes de actualizar
-        $lineaIds = $validated['linea_ids'] ?? null;
-        $okIds = $validated['ok_ids'] ?? null;
-        unset($validated['linea_ids'], $validated['ok_ids']);
+        return DB::transaction(function () use ($leader, $validated, $request) {
+            // Manejo de ADN: Solo si se enviaron los campos en el request
+            $hasLineaIds = $request->has('linea_ids');
+            $hasOkIds = $request->has('ok_ids');
 
-        // Determinar tipo ADN basado en los IDs proporcionados
-        if ($lineaIds !== null || $okIds !== null) {
-            if (!empty($lineaIds)) {
-                $validated['adn_type'] = 'linea';
-            } elseif (!empty($okIds)) {
-                $validated['adn_type'] = 'ok';
-            } else {
-                $validated['adn_type'] = null;
+            if ($hasLineaIds || $hasOkIds) {
+                if (!empty($request->linea_ids)) {
+                    $leader->oks()->detach(); // Limpiar el otro tipo
+                    $leader->lineas()->sync($request->linea_ids);
+                    $validated['adn_type'] = 'linea';
+                } elseif (!empty($request->ok_ids)) {
+                    $leader->lineas()->detach(); // Limpiar el otro tipo
+                    $leader->oks()->sync($request->ok_ids);
+                    $validated['adn_type'] = 'ok';
+                } else {
+                    // Si ambos se enviaron como arrays vacíos, se limpia el ADN
+                    $leader->lineas()->detach();
+                    $leader->oks()->detach();
+                    $validated['adn_type'] = null;
+                }
             }
+
+            unset($validated['linea_ids'], $validated['ok_ids']);
+            $leader->update($validated);
+            
+            // Recargar para devolver datos frescos
+            $leader->refresh();
+            $leader->load(['lineas:id,nombre,color', 'oks:id,nombre,color']);
+
+            return response()->json([
+                'message' => 'Líder actualizado exitosamente',
+                'leader' => $leader
+            ]);
+        });
+    }
+
+    /**
+     * Mostrar detalle de un líder específico
+     */
+    public function show(Request $request, $id)
+    {
+        if (!$request->user()->isSuperAdmin()) {
+            return response()->json(['error' => 'No autorizado'], 403);
         }
 
-        // Nota: No se hace Hash::make() porque el modelo User tiene cast 'hashed' para password
-        $leader->update($validated);
-
-        // Actualizar relaciones ADN si se proporcionaron
-        if ($lineaIds !== null) {
-            $leader->oks()->detach(); // Limpiar OKs
-            $leader->lineas()->sync($lineaIds);
-        } elseif ($okIds !== null) {
-            $leader->lineas()->detach(); // Limpiar líneas
-            $leader->oks()->sync($okIds);
-        }
-
-        // Recargar relaciones
-        $leader->load(['lineas:id,nombre,color', 'oks:id,nombre,color']);
+        $leader = User::where('role', 'leader')->findOrFail($id);
+        $leader->load([
+            'referrer:id,nombre_completo,cedula',
+            'directReferrals:id,nombre_completo,cedula,role,celular,is_active',
+            'lineas:id,nombre,color',
+            'oks:id,nombre,color'
+        ]);
 
         return response()->json([
-            'message' => 'Líder actualizado exitosamente',
-            'leader' => $leader
+            'leader' => $leader,
+            'network_stats' => $leader->getNetworkStats(),
         ]);
     }
 
@@ -275,14 +230,12 @@ class LeaderController extends Controller
      */
     public function destroy(Request $request, $id)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
         $leader = User::where('role', 'leader')->findOrFail($id);
 
-        // Verificar si tiene red activa
         if ($leader->total_network_count > 0) {
             return response()->json([
                 'error' => 'No se puede eliminar un líder con red activa',
@@ -290,20 +243,15 @@ class LeaderController extends Controller
             ], 422);
         }
 
-        // Soft delete
         $leader->delete();
-
-        return response()->json([
-            'message' => 'Líder eliminado exitosamente'
-        ]);
+        return response()->json(['message' => 'Líder eliminado exitosamente']);
     }
 
     /**
-     * Activar/Desactivar un líder (sin eliminarlo)
+     * Activar/Desactivar un líder
      */
     public function toggleActive(Request $request, $id)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
@@ -314,61 +262,46 @@ class LeaderController extends Controller
 
         return response()->json([
             'message' => $leader->is_active ? 'Líder activado' : 'Líder desactivado',
-            'leader' => [
-                'id' => $leader->id,
-                'nombre_completo' => $leader->nombre_completo,
-                'is_active' => $leader->is_active,
-            ]
+            'leader' => ['id' => $leader->id, 'is_active' => $leader->is_active]
         ]);
     }
 
     /**
-     * Cambiar contraseña de un líder
+     * Cambiar contraseña
      */
     public function changePassword(Request $request, $id)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
         $leader = User::where('role', 'leader')->findOrFail($id);
+        $validated = $request->validate(['password' => 'required|string|min:6|confirmed']);
 
-        $validated = $request->validate([
-            'password' => 'required|string|min:6|confirmed',
-        ]);
-
-        // El cast 'hashed' del modelo se encarga de hashear automáticamente
         $leader->password = $validated['password'];
         $leader->save();
 
-        return response()->json([
-            'message' => 'Contraseña actualizada exitosamente',
-        ]);
+        return response()->json(['message' => 'Contraseña actualizada exitosamente']);
     }
 
     /**
-     * Obtener estadísticas de todos los líderes
+     * Estadísticas globales
      */
     public function stats(Request $request)
     {
-        // Verificar que sea super admin
         if (!$request->user()->isSuperAdmin()) {
             return response()->json(['error' => 'No autorizado'], 403);
         }
 
-        $stats = [
+        return response()->json([
             'total_leaders' => User::where('role', 'leader')->count(),
             'active_leaders' => User::where('role', 'leader')->where('is_active', true)->count(),
             'inactive_leaders' => User::where('role', 'leader')->where('is_active', false)->count(),
-            'leaders_with_network' => User::where('role', 'leader')->where('total_network_count', '>', 0)->count(),
             'average_network_size' => User::where('role', 'leader')->avg('total_network_count'),
             'top_leaders' => User::where('role', 'leader')
                 ->orderBy('total_network_count', 'desc')
                 ->limit(5)
-                ->get(['id', 'nombre_completo', 'cedula', 'total_network_count', 'direct_referrals_count']),
-        ];
-
-        return response()->json($stats);
+                ->get(['id', 'nombre_completo', 'total_network_count']),
+        ]);
     }
 }
