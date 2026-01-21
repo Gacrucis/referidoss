@@ -100,11 +100,11 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                   <TableRow>
                     <TableHead>Nombre</TableHead>
                     <TableHead>Cédula</TableHead>
-                    <TableHead>Email</TableHead>
                     <TableHead>Celular</TableHead>
                     <TableHead>Red Directa</TableHead>
                     <TableHead>Red Total</TableHead>
                     <TableHead>ADN</TableHead>
+                    <TableHead>Entidad</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Acciones</TableHead>
@@ -117,7 +117,6 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                         {leader.nombre_completo}
                       </TableCell>
                       <TableCell>{leader.cedula}</TableCell>
-                      <TableCell className="text-sm">{leader.email}</TableCell>
                       <TableCell>{leader.celular}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">
@@ -130,7 +129,22 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
+                        {(leader as any).adn_type === 'linea' ? (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                            <Layers className="h-3 w-3 mr-1" />
+                            Líneas
+                          </Badge>
+                        ) : (leader as any).adn_type === 'ok' ? (
+                          <Badge className="bg-green-100 text-green-700 border-green-300">
+                            <GitBranch className="h-3 w-3 mr-1" />
+                            OKs
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1 max-w-[200px]">
                           {(leader as any).lineas?.map((l: Linea) => (
                             <Badge
                               key={l.id}
@@ -138,7 +152,6 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                               className="text-xs"
                               style={{ borderColor: l.color || '#3B82F6', color: l.color || '#3B82F6' }}
                             >
-                              <Layers className="h-2 w-2 mr-1" />
                               {l.nombre}
                             </Badge>
                           ))}
@@ -149,7 +162,6 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                               className="text-xs"
                               style={{ borderColor: o.color || '#10B981', color: o.color || '#10B981' }}
                             >
-                              <GitBranch className="h-2 w-2 mr-1" />
                               {o.nombre}
                             </Badge>
                           ))}
