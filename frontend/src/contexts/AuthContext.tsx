@@ -10,6 +10,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
   isLeader: boolean;
+  isLeaderPapa: boolean;
+  isLeaderHijo: boolean;
+  isLeaderLnpro: boolean;
+  isHierarchicalLeader: boolean;
   isMember: boolean;
 }
 
@@ -66,6 +70,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const isLeaderPapa = user?.role === 'leader_papa';
+  const isLeaderHijo = user?.role === 'leader_hijo';
+  const isLeaderLnpro = user?.role === 'leader_lnpro';
+  const isHierarchicalLeader = isLeaderPapa || isLeaderHijo || isLeaderLnpro;
+
   const value: AuthContextType = {
     user,
     loading,
@@ -73,7 +82,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     isAuthenticated: !!user,
     isSuperAdmin: user?.role === 'super_admin',
-    isLeader: user?.role === 'leader',
+    isLeader: user?.role === 'leader' || isHierarchicalLeader,
+    isLeaderPapa,
+    isLeaderHijo,
+    isLeaderLnpro,
+    isHierarchicalLeader,
     isMember: user?.role === 'member',
   };
 

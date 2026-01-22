@@ -9,8 +9,8 @@ import { leaderService } from '../../services/leader.service';
 import { lineaService } from '../../services/linea.service';
 import { okService } from '../../services/ok.service';
 import { departamentos, getMunicipiosByDepartamento } from '../../data/colombia';
-import type { LeaderFormData, Linea, Ok, AdnType } from '../../types';
-import { UserCog, Loader2, Layers, GitBranch, X } from 'lucide-react';
+import type { LeaderFormData, Linea, Ok, AdnType, LeaderType } from '../../types';
+import { UserCog, Loader2, Layers, GitBranch, X, Crown, Users } from 'lucide-react';
 
 interface LeaderFormProps {
   onSuccess?: () => void;
@@ -37,6 +37,7 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
     adn_type: null,
     linea_ids: [],
     ok_ids: [],
+    leader_type: undefined,
   });
 
   const [loading, setLoading] = useState(false);
@@ -110,6 +111,13 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
     });
   };
 
+  const handleLeaderTypeChange = (type: LeaderType | undefined) => {
+    setFormData((prev) => ({
+      ...prev,
+      leader_type: type,
+    }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -140,6 +148,7 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
         adn_type: null,
         linea_ids: [],
         ok_ids: [],
+        leader_type: undefined,
       });
 
       if (onSuccess) {
@@ -187,6 +196,47 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
               {error}
             </div>
           )}
+
+          {/* Tipo de Líder */}
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold">Tipo de Líder</h3>
+            <p className="text-xs text-gray-500">
+              Selecciona el tipo de líder a crear. El Líder Papá puede crear sub-líderes (Hijos Mayor).
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:bg-gray-50 transition-colors">
+                <input
+                  type="radio"
+                  name="leader_type"
+                  checked={formData.leader_type === undefined || formData.leader_type === null}
+                  onChange={() => handleLeaderTypeChange(undefined)}
+                  disabled={loading}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <Users className="h-5 w-5 text-blue-600" />
+                <div>
+                  <span className="text-sm font-medium">Líder Normal</span>
+                  <p className="text-xs text-gray-500">Líder estándar sin jerarquía</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer p-3 border rounded-lg hover:bg-yellow-50 border-yellow-200 transition-colors">
+                <input
+                  type="radio"
+                  name="leader_type"
+                  checked={formData.leader_type === 'papa'}
+                  onChange={() => handleLeaderTypeChange('papa')}
+                  disabled={loading}
+                  className="w-4 h-4 text-yellow-600"
+                />
+                <Crown className="h-5 w-5 text-yellow-500" />
+                <div>
+                  <span className="text-sm font-medium">Líder Papá</span>
+                  <p className="text-xs text-gray-500">Puede crear Hijos Mayor</p>
+                </div>
+              </label>
+            </div>
+          </div>
 
           {/* Credenciales */}
           <div className="space-y-4">
@@ -292,14 +342,13 @@ export const LeaderForm: React.FC<LeaderFormProps> = ({ onSuccess, onCancel }) =
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="segundo_apellido">Segundo Apellido *</Label>
+                <Label htmlFor="segundo_apellido">Segundo Apellido</Label>
                 <Input
                   id="segundo_apellido"
                   name="segundo_apellido"
-                  value={formData.segundo_apellido}
+                  value={formData.segundo_apellido || ''}
                   onChange={handleChange}
                   placeholder="García"
-                  required
                   disabled={loading}
                 />
               </div>

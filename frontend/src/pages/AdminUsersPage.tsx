@@ -168,6 +168,12 @@ export const AdminUsersPage: React.FC = () => {
         return <Badge className="bg-red-100 text-red-800">Super Admin</Badge>;
       case 'leader':
         return <Badge className="bg-blue-100 text-blue-800">Lider</Badge>;
+      case 'leader_papa':
+        return <Badge className="bg-yellow-100 text-yellow-800">Líder Papá</Badge>;
+      case 'leader_hijo':
+        return <Badge className="bg-purple-100 text-purple-800">Hijo Mayor</Badge>;
+      case 'leader_lnpro':
+        return <Badge className="bg-green-100 text-green-800">LnPro</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-800">Miembro</Badge>;
     }
@@ -227,6 +233,9 @@ export const AdminUsersPage: React.FC = () => {
               >
                 <option value="">Todos los roles</option>
                 <option value="leader">Lideres</option>
+                <option value="leader_papa">Líderes Papá</option>
+                <option value="leader_hijo">Hijos Mayor</option>
+                <option value="leader_lnpro">LnPro</option>
                 <option value="member">Miembros</option>
               </select>
             )}
@@ -503,6 +512,9 @@ export const AdminUsersPage: React.FC = () => {
                         onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}
                       >
                         <option value="leader">Lider</option>
+                        <option value="leader_papa">Líder Papá</option>
+                        <option value="leader_hijo">Hijo Mayor</option>
+                        <option value="leader_lnpro">LnPro</option>
                         <option value="member">Miembro</option>
                       </select>
                     </div>

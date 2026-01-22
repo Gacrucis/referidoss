@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\LeaderController;
+use App\Http\Controllers\Api\LeaderHierarchyController;
 use App\Http\Controllers\Api\LineaController;
 use App\Http\Controllers\Api\OkController;
 use App\Http\Controllers\Api\TreeController;
@@ -23,9 +24,13 @@ use Illuminate\Support\Facades\Route;
 // ============================================
 Route::post('/auth/login', [AuthController::class, 'login']);
 
-// Registro público con código de referido
+// Registro público con código de referido (para nietos/miembros)
 Route::get('/public/referrer/{code}', [UserController::class, 'getReferrerByCode']);
 Route::post('/public/register', [UserController::class, 'publicRegister']);
+
+// Registro de sub-líderes con código de líder
+Route::get('/public/leader/{code}', [LeaderHierarchyController::class, 'getLeaderByCode']);
+Route::post('/public/register-subleader', [LeaderHierarchyController::class, 'registerByLeaderCode']);
 
 // ============================================
 // Rutas protegidas (requieren autenticación)
@@ -121,5 +126,35 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/{id}', [OkController::class, 'show']);        // Ver detalle
         Route::put('/{id}', [OkController::class, 'update']);      // Actualizar OK
         Route::delete('/{id}', [OkController::class, 'destroy']);  // Eliminar OK
+    });
+
+    // ============================================
+    // Panel de Líder Jerárquico (Papa/Hijo/LnPro)
+    // ============================================
+    Route::prefix('leader-panel')->group(function () {
+        Route::get('/dashboard', [LeaderHierarchyController::class, 'dashboard']);     // Dashboard del líder
+        Route::get('/subleaders', [LeaderHierarchyController::class, 'listSubleaders']); // Mis sub-líderes
+        Route::post('/subleaders', [LeaderHierarchyController::class, 'createSubleader']); // Crear sub-líder
+        Route::get('/subleaders/{id}', [LeaderHierarchyController::class, 'showSubleader']); // Ver sub-líder
+        Route::post('/subleaders/{id}/toggle-active', [LeaderHierarchyController::class, 'toggleSubleaderActive']);
+        Route::post('/subleaders/{id}/change-password', [LeaderHierarchyController::class, 'changeSubleaderPassword']);
+        Route::get('/my-referrals', [LeaderHierarchyController::class, 'listMyReferrals']); // Mis nietos directos
+        Route::get('/network-members', [LeaderHierarchyController::class, 'listAllNetworkMembers']); // Red acumulada
+        Route::get('/hierarchy-tree', [LeaderHierarchyController::class, 'getHierarchyTree']); // Árbol jerárquico
+    });
+
+    // ============================================
+    // Gestión de Líderes Papá (Solo Super Admin)
+    // ============================================
+    Route::prefix('leader-papas')->group(function () {
+        Route::get('/', [LeaderController::class, 'indexPapas']);           // Listar líderes papá
+        Route::post('/', [LeaderController::class, 'storePapa']);           // Crear líder papá
+        Route::get('/stats', [LeaderController::class, 'statsPapas']);      // Estadísticas
+        Route::get('/hierarchy', [LeaderController::class, 'getFullHierarchy']); // Jerarquía completa
+        Route::get('/{id}', [LeaderController::class, 'showPapa']);         // Ver detalle
+        Route::put('/{id}', [LeaderController::class, 'updatePapa']);       // Actualizar
+        Route::delete('/{id}', [LeaderController::class, 'destroyPapa']);   // Eliminar
+        Route::post('/{id}/toggle-active', [LeaderController::class, 'toggleActivePapa']);
+        Route::post('/{id}/change-password', [LeaderController::class, 'changePasswordPapa']);
     });
 });

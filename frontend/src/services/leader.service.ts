@@ -3,11 +3,12 @@ import type { User, LeaderFormData, PaginatedResponse, LeaderStats } from '../ty
 
 export const leaderService = {
   /**
-   * Listar líderes
+   * Listar líderes (todos los tipos)
    */
   async getLeaders(params?: {
     search?: string;
     is_active?: boolean;
+    role?: string;
     page?: number;
     per_page?: number;
   }): Promise<PaginatedResponse<User>> {

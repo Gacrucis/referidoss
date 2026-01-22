@@ -16,6 +16,8 @@ import {
   Dna,
   ChevronDown,
   ChevronRight,
+  Crown,
+  UserPlus,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 
@@ -42,19 +44,33 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       title: 'Dashboard',
       icon: LayoutDashboard,
       href: '/dashboard',
-      roles: ['super_admin', 'leader', 'member'],
+      roles: ['super_admin', 'leader', 'leader_papa', 'leader_hijo', 'leader_lnpro', 'member'],
+    },
+    // Panel de Líder Jerárquico (para leader_papa, leader_hijo, leader_lnpro)
+    {
+      title: 'Mi Panel de Líder',
+      icon: Crown,
+      href: '/leader/panel',
+      roles: ['leader_papa', 'leader_hijo', 'leader_lnpro'],
     },
     {
       title: 'Referidos',
       icon: Users,
       href: '/users',
-      roles: ['super_admin', 'leader', 'member'],
+      roles: ['super_admin', 'leader', 'leader_papa', 'leader_hijo', 'leader_lnpro', 'member'],
     },
     {
       title: 'Árbol Jerárquico',
       icon: Network,
       href: '/tree',
-      roles: ['super_admin', 'leader', 'member'],
+      roles: ['super_admin', 'leader', 'leader_papa', 'leader_hijo', 'leader_lnpro', 'member'],
+    },
+    // Gestión para Super Admin
+    {
+      title: 'Líderes Papá',
+      icon: Crown,
+      href: '/leader-papas',
+      roles: ['super_admin'],
     },
     {
       title: 'Gestion de Lideres',
@@ -91,7 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       title: 'Mi Perfil',
       icon: UserCircle,
       href: '/profile',
-      roles: ['super_admin', 'leader'],
+      roles: ['super_admin', 'leader', 'leader_papa', 'leader_hijo', 'leader_lnpro'],
     },
   ];
 

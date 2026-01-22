@@ -23,6 +23,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'leader_type',
         'adn_type',
         'cedula',
         'nombre_completo',
@@ -40,9 +41,15 @@ class User extends Authenticatable
         'observaciones',
         'referrer_id',
         'referral_code',
+        'leader_referral_code',
+        'leader_parent_id',
+        'leader_path',
         'path',
         'level',
         'is_active',
+        'direct_subleaders_count',
+        'total_subleaders_count',
+        'total_network_members_count',
     ];
 
     /**
@@ -76,9 +83,14 @@ class User extends Authenticatable
         parent::boot();
 
         static::creating(function ($user) {
-            // Generar código de referido único
+            // Generar código de referido único (para nietos/miembros)
             if (empty($user->referral_code)) {
                 $user->referral_code = self::generateReferralCode();
+            }
+
+            // Generar código para referir sub-líderes si es un líder jerárquico
+            if (in_array($user->role, ['leader_papa', 'leader_hijo', 'leader_lnpro']) && empty($user->leader_referral_code)) {
+                $user->leader_referral_code = self::generateLeaderReferralCode();
             }
 
             // Construir nombre_completo a partir de los nombres separados
@@ -118,6 +130,12 @@ class User extends Authenticatable
 
             // Actualizar estadísticas del referidor
             $user->updateReferrerStats();
+
+            // Actualizar path y estadísticas de la jerarquía de líderes
+            if (in_array($user->role, ['leader_papa', 'leader_hijo', 'leader_lnpro'])) {
+                $user->updateLeaderPath();
+                $user->updateLeaderParentStats();
+            }
         });
 
         static::deleting(function ($user) {
@@ -145,13 +163,41 @@ class User extends Authenticatable
     }
 
     /**
-     * Generar código de referido único de 8 caracteres
+     * Relación: Líder superior en la jerarquía (para leader_hijo y leader_lnpro)
+     */
+    public function leaderParent()
+    {
+        return $this->belongsTo(User::class, 'leader_parent_id');
+    }
+
+    /**
+     * Relación: Sub-líderes directos (líderes que este líder creó)
+     */
+    public function directSubleaders()
+    {
+        return $this->hasMany(User::class, 'leader_parent_id');
+    }
+
+    /**
+     * Generar código de referido único de 8 caracteres (para nietos/miembros)
      */
     public static function generateReferralCode(): string
     {
         do {
             $code = strtoupper(Str::random(8));
         } while (self::where('referral_code', $code)->exists());
+
+        return $code;
+    }
+
+    /**
+     * Generar código único para referir sub-líderes (10 caracteres con prefijo 'L')
+     */
+    public static function generateLeaderReferralCode(): string
+    {
+        do {
+            $code = 'L' . strtoupper(Str::random(9));
+        } while (self::where('leader_referral_code', $code)->exists());
 
         return $code;
     }
@@ -398,11 +444,43 @@ class User extends Authenticatable
     }
 
     /**
-     * Verificar si es líder
+     * Verificar si es líder (cualquier tipo)
      */
     public function isLeader(): bool
     {
-        return $this->role === 'leader';
+        return $this->role === 'leader' || $this->isHierarchicalLeader();
+    }
+
+    /**
+     * Verificar si es líder jerárquico (papa, hijo, lnpro)
+     */
+    public function isHierarchicalLeader(): bool
+    {
+        return in_array($this->role, ['leader_papa', 'leader_hijo', 'leader_lnpro']);
+    }
+
+    /**
+     * Verificar si es Líder Papá
+     */
+    public function isLeaderPapa(): bool
+    {
+        return $this->role === 'leader_papa';
+    }
+
+    /**
+     * Verificar si es Líder Hijo Mayor
+     */
+    public function isLeaderHijo(): bool
+    {
+        return $this->role === 'leader_hijo';
+    }
+
+    /**
+     * Verificar si es Líder LnPro
+     */
+    public function isLeaderLnpro(): bool
+    {
+        return $this->role === 'leader_lnpro';
     }
 
     /**
@@ -411,6 +489,203 @@ class User extends Authenticatable
     public function isMember(): bool
     {
         return $this->role === 'member';
+    }
+
+    /**
+     * Obtener el tipo de sub-líder que puede crear este líder
+     */
+    public function canCreateSubleaderType(): ?string
+    {
+        if ($this->role === 'leader_papa') {
+            return 'leader_hijo';
+        }
+        if ($this->role === 'leader_hijo') {
+            return 'leader_lnpro';
+        }
+        return null; // leader_lnpro no puede crear sub-líderes
+    }
+
+    /**
+     * Verificar si puede crear sub-líderes
+     */
+    public function canCreateSubleaders(): bool
+    {
+        return $this->canCreateSubleaderType() !== null;
+    }
+
+    /**
+     * Actualizar path de la jerarquía de líderes
+     */
+    public function updateLeaderPath(): void
+    {
+        if ($this->leader_parent_id) {
+            $parent = User::find($this->leader_parent_id);
+            if ($parent) {
+                $newPath = $parent->leader_path ? $parent->leader_path . '.' . $this->id : (string)$this->id;
+                $this->updateQuietly(['leader_path' => $newPath]);
+            }
+        } else {
+            $this->updateQuietly(['leader_path' => (string)$this->id]);
+        }
+    }
+
+    /**
+     * Actualizar estadísticas del líder padre (incrementar contadores)
+     */
+    public function updateLeaderParentStats(): void
+    {
+        if ($this->leader_parent_id) {
+            // Incrementar contador de sub-líderes directos del padre
+            DB::table('users')
+                ->where('id', $this->leader_parent_id)
+                ->increment('direct_subleaders_count');
+
+            // Incrementar total_subleaders_count de todos los ancestros en la jerarquía de líderes
+            $ancestors = $this->getLeaderAncestors();
+            foreach ($ancestors as $ancestor) {
+                DB::table('users')
+                    ->where('id', $ancestor->id)
+                    ->increment('total_subleaders_count');
+            }
+        }
+    }
+
+    /**
+     * Decrementar estadísticas del líder padre (al eliminar)
+     */
+    public function decrementLeaderParentStats(): void
+    {
+        if ($this->leader_parent_id) {
+            DB::table('users')
+                ->where('id', $this->leader_parent_id)
+                ->decrement('direct_subleaders_count');
+
+            $networkSize = $this->total_subleaders_count + 1;
+
+            $ancestors = $this->getLeaderAncestors();
+            foreach ($ancestors as $ancestor) {
+                DB::table('users')
+                    ->where('id', $ancestor->id)
+                    ->decrement('total_subleaders_count', $networkSize);
+            }
+        }
+    }
+
+    /**
+     * Obtener todos los ancestros en la jerarquía de líderes
+     */
+    public function getLeaderAncestors()
+    {
+        $ancestors = collect([]);
+        $current = $this;
+
+        while ($current->leader_parent_id) {
+            $parent = User::find($current->leader_parent_id);
+            if ($parent && in_array($parent->role, ['leader_papa', 'leader_hijo', 'leader_lnpro'])) {
+                $ancestors->push($parent);
+                $current = $parent;
+            } else {
+                break;
+            }
+        }
+
+        return $ancestors;
+    }
+
+    /**
+     * Obtener todos los sub-líderes (descendientes en la jerarquía)
+     */
+    public function getAllSubleaders()
+    {
+        $subleaders = collect([]);
+        $queue = collect([$this->id]);
+
+        while ($queue->isNotEmpty()) {
+            $currentId = $queue->shift();
+            $children = User::where('leader_parent_id', $currentId)
+                ->whereIn('role', ['leader_papa', 'leader_hijo', 'leader_lnpro'])
+                ->get();
+
+            foreach ($children as $child) {
+                $subleaders->push($child);
+                $queue->push($child->id);
+            }
+        }
+
+        return $subleaders;
+    }
+
+    /**
+     * Obtener el Líder Papá raíz de esta jerarquía
+     */
+    public function getRootLeaderPapa()
+    {
+        if ($this->role === 'leader_papa') {
+            return $this;
+        }
+
+        if (!$this->leader_path) {
+            return null;
+        }
+
+        $rootId = explode('.', $this->leader_path)[0];
+        return User::where('id', $rootId)
+            ->where('role', 'leader_papa')
+            ->first();
+    }
+
+    /**
+     * Calcular total de miembros (nietos) acumulados en toda la red jerárquica
+     */
+    public function calculateTotalNetworkMembers(): int
+    {
+        // Mis propios referidos directos y su red
+        $myMembers = $this->total_network_count;
+
+        // Sumar los referidos de todos mis sub-líderes
+        $subleaders = $this->getAllSubleaders();
+        foreach ($subleaders as $subleader) {
+            $myMembers += $subleader->total_network_count;
+        }
+
+        return $myMembers;
+    }
+
+    /**
+     * Actualizar contador de miembros acumulados (llamar después de cambios en la red)
+     */
+    public function recalculateTotalNetworkMembers(): void
+    {
+        $total = $this->calculateTotalNetworkMembers();
+        $this->updateQuietly(['total_network_members_count' => $total]);
+
+        // Actualizar también a los ancestros
+        $ancestors = $this->getLeaderAncestors();
+        foreach ($ancestors as $ancestor) {
+            $ancestorTotal = $ancestor->calculateTotalNetworkMembers();
+            $ancestor->updateQuietly(['total_network_members_count' => $ancestorTotal]);
+        }
+    }
+
+    /**
+     * Obtener estadísticas de la jerarquía de líderes
+     */
+    public function getLeaderHierarchyStats(): array
+    {
+        $subleaders = $this->getAllSubleaders();
+
+        $hijoCount = $subleaders->where('role', 'leader_hijo')->count();
+        $lnproCount = $subleaders->where('role', 'leader_lnpro')->count();
+
+        return [
+            'direct_subleaders' => $this->direct_subleaders_count,
+            'total_subleaders' => $this->total_subleaders_count,
+            'hijos_mayores' => $hijoCount,
+            'lnpros' => $lnproCount,
+            'total_network_members' => $this->total_network_members_count,
+            'my_direct_referrals' => $this->direct_referrals_count,
+            'my_network' => $this->total_network_count,
+        ];
     }
 
     /**
