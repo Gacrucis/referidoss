@@ -11,7 +11,7 @@ Sistema web para gestionar redes de referidos con estructura jerárquica multini
 - Laravel Sanctum (autenticación)
 
 ### Frontend
-- React 19
+- React 22.12.0
 - TypeScript
 - Vite
 - Tailwind CSS
@@ -39,7 +39,7 @@ referidos/
 ### Requisitos
 - PHP 8.2+
 - Composer
-- Node.js 18+
+- Node.js 22.12+
 - PostgreSQL 14+
 
 ### Backend
