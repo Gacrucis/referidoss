@@ -504,11 +504,31 @@ class UserController extends Controller
         // Solo super admin puede cambiar estos campos
         if ($authUser->isSuperAdmin()) {
             $baseRules['email'] = 'sometimes|nullable|email';
-            $baseRules['role'] = 'sometimes|in:leader,member';
+            $baseRules['role'] = 'sometimes|in:leader,leader_papa,leader_hijo,leader_lnpro,member';
             $baseRules['is_active'] = 'sometimes|boolean';
         }
 
         $validated = $request->validate($baseRules);
+
+        // Si se está cambiando a un rol jerárquico, generar leader_referral_code si no tiene
+        if (isset($validated['role']) && in_array($validated['role'], ['leader_papa', 'leader_hijo', 'leader_lnpro'])) {
+            if (empty($user->leader_referral_code)) {
+                $validated['leader_referral_code'] = $user->generateLeaderReferralCode();
+            }
+            // Establecer leader_type según el rol
+            $roleToType = [
+                'leader_papa' => 'papa',
+                'leader_hijo' => 'hijo',
+                'leader_lnpro' => 'lnpro',
+            ];
+            $validated['leader_type'] = $roleToType[$validated['role']] ?? null;
+        } elseif (isset($validated['role']) && !in_array($validated['role'], ['leader_papa', 'leader_hijo', 'leader_lnpro'])) {
+            // Si se cambia a un rol no jerárquico, limpiar campos de jerarquía
+            $validated['leader_referral_code'] = null;
+            $validated['leader_type'] = null;
+            $validated['leader_parent_id'] = null;
+            $validated['leader_path'] = null;
+        }
 
         $user->update($validated);
 

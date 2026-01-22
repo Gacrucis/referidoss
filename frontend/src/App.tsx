@@ -9,9 +9,12 @@ import { LeadersPage } from './pages/LeadersPage';
 import { TreePage } from './pages/TreePage';
 import { ProfilePage } from './pages/ProfilePage';
 import { PublicRegisterPage } from './pages/PublicRegisterPage';
+import { PublicSubleaderRegisterPage } from './pages/PublicSubleaderRegisterPage';
 import { AdminUsersPage } from './pages/AdminUsersPage';
 import { AdnLineasPage } from './pages/AdnLineasPage';
 import { AdnOksPage } from './pages/AdnOksPage';
+import { LeaderPapasPage } from './pages/LeaderPapasPage';
+import { LeaderPanelPage } from './pages/LeaderPanelPage';
 
 function App() {
   return (
@@ -20,7 +23,9 @@ function App() {
         <Routes>
           {/* Rutas públicas */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/registro/:code" element={<PublicRegisterPage />} />
           <Route path="/register/:code" element={<PublicRegisterPage />} />
+          <Route path="/registro-lider/:code" element={<PublicSubleaderRegisterPage />} />
 
           {/* Rutas protegidas con Layout */}
           <Route
@@ -84,6 +89,29 @@ function App() {
               <ProtectedRoute allowedRoles={['super_admin']}>
                 <Layout>
                   <AdnOksPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/leader-papas"
+            element={
+              <ProtectedRoute allowedRoles={['super_admin']}>
+                <Layout>
+                  <LeaderPapasPage />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Panel de Líder Jerárquico */}
+          <Route
+            path="/leader/panel"
+            element={
+              <ProtectedRoute allowedRoles={['leader_papa', 'leader_hijo', 'leader_lnpro']}>
+                <Layout>
+                  <LeaderPanelPage />
                 </Layout>
               </ProtectedRoute>
             }

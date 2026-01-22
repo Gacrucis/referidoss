@@ -3,7 +3,7 @@ import { leaderService } from '../services/leader.service';
 import { LeaderForm } from '../components/leaders/LeaderForm';
 import { LeadersTable } from '../components/leaders/LeadersTable';
 import { StatCard } from '../components/dashboard/StatCard';
-import { Users, UserCheck, UserX, Network } from 'lucide-react';
+import { Users, UserCheck, UserX, Network, Crown, UserPlus, User as UserIcon } from 'lucide-react';
 import type { PaginatedResponse, User, LeaderStats } from '../types';
 
 export const LeadersPage: React.FC = () => {
@@ -13,10 +13,11 @@ export const LeadersPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
+  const [roleFilter, setRoleFilter] = useState('');
 
   useEffect(() => {
     loadData();
-  }, [currentPage]);
+  }, [currentPage, roleFilter]);
 
   const loadData = async (search?: string) => {
     try {
@@ -24,6 +25,7 @@ export const LeadersPage: React.FC = () => {
       const [leadersData, statsData] = await Promise.all([
         leaderService.getLeaders({
           search: search || searchQuery,
+          role: roleFilter || undefined,
           page: currentPage,
           per_page: 15,
         }),
@@ -46,6 +48,11 @@ export const LeadersPage: React.FC = () => {
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  const handleRoleFilter = (role: string) => {
+    setRoleFilter(role);
+    setCurrentPage(1);
   };
 
   const handleFormSuccess = () => {
@@ -75,32 +82,62 @@ export const LeadersPage: React.FC = () => {
 
       {/* Stats Grid */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            title="Total Líderes"
-            value={stats.total_leaders}
-            icon={Users}
-            description="Todos los líderes"
-          />
-          <StatCard
-            title="Líderes Activos"
-            value={stats.active_leaders}
-            icon={UserCheck}
-            description="Con acceso al sistema"
-          />
-          <StatCard
-            title="Líderes Inactivos"
-            value={stats.inactive_leaders}
-            icon={UserX}
-            description="Sin acceso"
-          />
-          <StatCard
-            title="Promedio de Red"
-            value={Math.round(stats.average_network_size)}
-            icon={Network}
-            description="Por líder"
-          />
-        </div>
+        <>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Total Líderes"
+              value={stats.total_leaders}
+              icon={Users}
+              description="Todos los líderes"
+            />
+            <StatCard
+              title="Líderes Activos"
+              value={stats.active_leaders}
+              icon={UserCheck}
+              description="Con acceso al sistema"
+            />
+            <StatCard
+              title="Líderes Inactivos"
+              value={stats.inactive_leaders}
+              icon={UserX}
+              description="Sin acceso"
+            />
+            <StatCard
+              title="Promedio de Red"
+              value={Math.round(stats.average_network_size)}
+              icon={Network}
+              description="Por líder"
+            />
+          </div>
+
+          {/* Stats por Tipo de Líder */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              title="Líderes Normales"
+              value={stats.leader_normal_count || 0}
+              icon={UserIcon}
+              description="Rol básico"
+            />
+            <StatCard
+              title="Líderes Papá"
+              value={stats.leader_papa_count || 0}
+              icon={Crown}
+              description="Nivel jerárquico alto"
+            />
+            <StatCard
+              title="Hijos Mayor"
+              value={stats.leader_hijo_count || 0}
+              icon={UserPlus}
+              description="Segundo nivel"
+            />
+            <StatCard
+              title="LnPro"
+              value={stats.leader_lnpro_count || 0}
+              icon={UserCheck}
+              description="Tercer nivel"
+            />
+          </div>
+        </>
       )}
 
       {/* Form */}
@@ -118,6 +155,8 @@ export const LeadersPage: React.FC = () => {
         onSearch={handleSearch}
         onPageChange={handlePageChange}
         onRefresh={loadData}
+        onRoleFilter={handleRoleFilter}
+        currentRoleFilter={roleFilter}
       />
     </div>
   );

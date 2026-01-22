@@ -1,7 +1,8 @@
 // ============================================
 // Tipos de Usuario y Roles
 // ============================================
-export type UserRole = 'super_admin' | 'leader' | 'member';
+export type UserRole = 'super_admin' | 'leader' | 'leader_papa' | 'leader_hijo' | 'leader_lnpro' | 'member';
+export type LeaderType = 'papa' | 'hijo' | 'lnpro';
 
 export interface UserBasicInfo {
   id: number;
@@ -13,6 +14,7 @@ export interface User {
   id: number;
   email: string | null;
   role: UserRole;
+  leader_type?: LeaderType | null;
   cedula: string;
   nombre_completo: string;
   primer_nombre: string | null;
@@ -29,16 +31,24 @@ export interface User {
   observaciones: string | null;
   referrer_id: number | null;
   referral_code: string;
+  leader_referral_code?: string | null;
+  leader_parent_id?: number | null;
   path: string;
+  leader_path?: string | null;
   level: number;
   is_active: boolean;
   direct_referrals_count: number;
   total_network_count: number;
+  direct_subleaders_count?: number;
+  total_subleaders_count?: number;
+  total_network_members_count?: number;
   created_at: string;
   updated_at: string;
   // Relaciones cargadas opcionalmente
   referrer?: UserBasicInfo | null;
   direct_referrals?: UserBasicInfo[];
+  leader_parent?: UserBasicInfo | null;
+  direct_subleaders?: UserBasicInfo[];
 }
 
 export interface AuthUser {
@@ -46,12 +56,17 @@ export interface AuthUser {
   nombre_completo: string;
   email: string;
   role: UserRole;
+  leader_type?: LeaderType | null;
   cedula: string;
   celular: string;
   referral_code: string;
+  leader_referral_code?: string | null;
   level: number;
   direct_referrals_count: number;
   total_network_count: number;
+  direct_subleaders_count?: number;
+  total_subleaders_count?: number;
+  total_network_members_count?: number;
 }
 
 export interface LoginCredentials {
@@ -230,7 +245,7 @@ export interface LeaderFormData {
   primer_nombre: string;
   segundo_nombre?: string;
   primer_apellido: string;
-  segundo_apellido: string;
+  segundo_apellido?: string;
   email: string;
   password: string;
   celular: string;
@@ -245,14 +260,19 @@ export interface LeaderFormData {
   adn_type?: AdnType;
   linea_ids?: number[];
   ok_ids?: number[];
+  leader_type?: LeaderType;
 }
 
 export interface LeaderStats {
   total_leaders: number;
   active_leaders: number;
   inactive_leaders: number;
-  leaders_with_network: number;
+  leaders_with_network?: number;
   average_network_size: number;
+  leader_normal_count?: number;
+  leader_papa_count?: number;
+  leader_hijo_count?: number;
+  leader_lnpro_count?: number;
   top_leaders: TopReferrer[];
 }
 
@@ -261,4 +281,94 @@ export interface UserWithAdn extends User {
   adn_type: AdnType;
   lineas?: Linea[];
   oks?: Ok[];
+}
+
+// ============================================
+// Jerarquía de Líderes (Papa/Hijo/LnPro)
+// ============================================
+export interface LeaderPapaFormData {
+  cedula: string;
+  primer_nombre: string;
+  segundo_nombre?: string;
+  primer_apellido: string;
+  segundo_apellido?: string;
+  email: string;
+  password: string;
+  celular: string;
+  barrio: string;
+  departamento_votacion: string;
+  municipio_votacion: string;
+  puesto_votacion: string;
+  direccion_votacion: string;
+  mesa_votacion: string;
+  observaciones?: string;
+  linea_ids?: number[];
+  ok_ids?: number[];
+}
+
+export interface SubleaderFormData {
+  cedula: string;
+  primer_nombre: string;
+  segundo_nombre?: string;
+  primer_apellido: string;
+  segundo_apellido?: string;
+  email: string;
+  password: string;
+  celular: string;
+  barrio: string;
+  departamento_votacion: string;
+  municipio_votacion: string;
+  puesto_votacion: string;
+  direccion_votacion: string;
+  mesa_votacion: string;
+  observaciones?: string;
+}
+
+export interface LeaderHierarchyStats {
+  direct_subleaders: number;
+  total_subleaders: number;
+  hijos_mayores: number;
+  lnpros: number;
+  total_network_members: number;
+  my_direct_referrals: number;
+  my_network: number;
+}
+
+export interface LeaderPapaStats {
+  total_papas: number;
+  active_papas: number;
+  inactive_papas: number;
+  total_hijos: number;
+  total_lnpros: number;
+  average_subleaders: number;
+  average_network_members: number;
+  top_papas: Array<{
+    id: number;
+    nombre_completo: string;
+    total_subleaders_count: number;
+    total_network_members_count: number;
+  }>;
+}
+
+export interface LeaderDashboard {
+  leader: UserWithAdn;
+  stats: LeaderHierarchyStats;
+  network_stats: NetworkStats;
+  can_create_subleaders: boolean;
+  subleader_type: 'leader_hijo' | 'leader_lnpro' | null;
+}
+
+export interface HierarchyTreeNode {
+  id: number;
+  nombre_completo: string;
+  cedula: string;
+  role: UserRole;
+  is_active: boolean;
+  direct_referrals_count: number;
+  total_network_count: number;
+  direct_subleaders_count: number;
+  adn_type: AdnType;
+  lineas?: Linea[];
+  oks?: Ok[];
+  children: HierarchyTreeNode[];
 }

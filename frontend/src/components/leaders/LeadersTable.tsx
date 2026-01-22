@@ -4,19 +4,21 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Badge } from '../ui/badge';
-import { Search, ChevronLeft, ChevronRight, Power, PowerOff, Key, Eye, Edit2, Layers, GitBranch } from 'lucide-react';
-import type { User, PaginatedResponse, Linea, Ok } from '../../types';
+import { Search, ChevronLeft, ChevronRight, Power, PowerOff, Key, Eye, Edit2, Layers, GitBranch, Crown, UserCheck, User } from 'lucide-react';
+import type { User as UserType, PaginatedResponse, Linea, Ok } from '../../types';
 import { leaderService } from '../../services/leader.service';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { LeaderDetailsModal } from './LeaderDetailsModal';
 import { EditLeaderModal } from './EditLeaderModal';
 
 interface LeadersTableProps {
-  data: PaginatedResponse<User> | null;
+  data: PaginatedResponse<UserType> | null;
   loading: boolean;
   onSearch: (query: string) => void;
   onPageChange: (page: number) => void;
   onRefresh: () => void;
+  onRoleFilter?: (role: string) => void;
+  currentRoleFilter?: string;
 }
 
 export const LeadersTable: React.FC<LeadersTableProps> = ({
@@ -25,12 +27,14 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
   onSearch,
   onPageChange,
   onRefresh,
+  onRoleFilter,
+  currentRoleFilter,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [toggling, setToggling] = useState<number | null>(null);
   const [passwordModal, setPasswordModal] = useState<{ id: number; name: string } | null>(null);
   const [detailsModal, setDetailsModal] = useState<{ id: number; name: string } | null>(null);
-  const [editModal, setEditModal] = useState<User | null>(null);
+  const [editModal, setEditModal] = useState<UserType | null>(null);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,27 +61,77 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
     });
   };
 
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'leader_papa':
+        return (
+          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+            <Crown className="h-3 w-3 mr-1" />
+            Papá
+          </Badge>
+        );
+      case 'leader_hijo':
+        return (
+          <Badge className="bg-purple-100 text-purple-800 border-purple-300">
+            <UserCheck className="h-3 w-3 mr-1" />
+            Hijo
+          </Badge>
+        );
+      case 'leader_lnpro':
+        return (
+          <Badge className="bg-green-100 text-green-800 border-green-300">
+            <User className="h-3 w-3 mr-1" />
+            LnPro
+          </Badge>
+        );
+      default:
+        return (
+          <Badge className="bg-blue-100 text-blue-800 border-blue-300">
+            <User className="h-3 w-3 mr-1" />
+            Normal
+          </Badge>
+        );
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Lista de Líderes</CardTitle>
         <CardDescription>Gestiona todos los líderes del sistema</CardDescription>
 
-        {/* Search */}
-        <form onSubmit={handleSearchSubmit} className="flex gap-2 pt-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por cédula, nombre o email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Button type="submit" disabled={loading}>
-            Buscar
-          </Button>
-        </form>
+        {/* Search and Filter */}
+        <div className="flex flex-col md:flex-row gap-4 pt-4">
+          <form onSubmit={handleSearchSubmit} className="flex gap-2 flex-1">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por cédula, nombre o email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <Button type="submit" disabled={loading}>
+              Buscar
+            </Button>
+          </form>
+
+          {/* Role Filter */}
+          {onRoleFilter && (
+            <select
+              className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={currentRoleFilter || ''}
+              onChange={(e) => onRoleFilter(e.target.value)}
+            >
+              <option value="">Todos los tipos</option>
+              <option value="leader">Líder Normal</option>
+              <option value="leader_papa">Líder Papá</option>
+              <option value="leader_hijo">Hijo Mayor</option>
+              <option value="leader_lnpro">LnPro</option>
+            </select>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -94,17 +148,17 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
         ) : (
           <>
             {/* Table */}
-            <div className="rounded-md border">
+            <div className="rounded-md border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Nombre</TableHead>
+                    <TableHead>Tipo</TableHead>
                     <TableHead>Cédula</TableHead>
-                    <TableHead>Email</TableHead>
                     <TableHead>Celular</TableHead>
-                    <TableHead>Red Directa</TableHead>
-                    <TableHead>Red Total</TableHead>
+                    <TableHead>Red</TableHead>
                     <TableHead>ADN</TableHead>
+                    <TableHead>Entidad</TableHead>
                     <TableHead>Estado</TableHead>
                     <TableHead>Fecha</TableHead>
                     <TableHead>Acciones</TableHead>
@@ -116,21 +170,38 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                       <TableCell className="font-medium">
                         {leader.nombre_completo}
                       </TableCell>
+                      <TableCell>
+                        {getRoleBadge((leader as any).role || 'leader')}
+                      </TableCell>
                       <TableCell>{leader.cedula}</TableCell>
-                      <TableCell className="text-sm">{leader.email}</TableCell>
                       <TableCell>{leader.celular}</TableCell>
                       <TableCell>
-                        <Badge variant="secondary">
-                          {leader.direct_referrals_count}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="secondary" className="text-xs">
+                            {leader.direct_referrals_count} directos
+                          </Badge>
+                          <Badge variant="default" className="text-xs">
+                            {leader.total_network_count} total
+                          </Badge>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="default">
-                          {leader.total_network_count}
-                        </Badge>
+                        {(leader as any).adn_type === 'linea' ? (
+                          <Badge className="bg-blue-100 text-blue-700 border-blue-300">
+                            <Layers className="h-3 w-3 mr-1" />
+                            Líneas
+                          </Badge>
+                        ) : (leader as any).adn_type === 'ok' ? (
+                          <Badge className="bg-green-100 text-green-700 border-green-300">
+                            <GitBranch className="h-3 w-3 mr-1" />
+                            OKs
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
+                        <div className="flex flex-wrap gap-1 max-w-[150px]">
                           {(leader as any).lineas?.map((l: Linea) => (
                             <Badge
                               key={l.id}
@@ -138,7 +209,6 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                               className="text-xs"
                               style={{ borderColor: l.color || '#3B82F6', color: l.color || '#3B82F6' }}
                             >
-                              <Layers className="h-2 w-2 mr-1" />
                               {l.nombre}
                             </Badge>
                           ))}
@@ -149,7 +219,6 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                               className="text-xs"
                               style={{ borderColor: o.color || '#10B981', color: o.color || '#10B981' }}
                             >
-                              <GitBranch className="h-2 w-2 mr-1" />
                               {o.nombre}
                             </Badge>
                           ))}
@@ -169,10 +238,10 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                         {formatDate(leader.created_at)}
                       </TableCell>
                       <TableCell>
-                        <div className="flex gap-2">
+                        <div className="flex gap-1">
                           <Button
                             size="sm"
-                            variant="default"
+                            variant="outline"
                             onClick={() =>
                               setDetailsModal({
                                 id: leader.id,
@@ -180,15 +249,16 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                               })
                             }
                             title="Ver detalles"
+                            className="h-8 w-8 p-0"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            Ver
+                            <Eye className="h-4 w-4" />
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => setEditModal(leader)}
                             title="Editar líder"
+                            className="h-8 w-8 p-0"
                           >
                             <Edit2 className="h-4 w-4" />
                           </Button>
@@ -197,6 +267,8 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                             variant={leader.is_active ? 'outline' : 'default'}
                             onClick={() => handleToggleActive(leader.id)}
                             disabled={toggling === leader.id}
+                            title={leader.is_active ? 'Desactivar' : 'Activar'}
+                            className="h-8 w-8 p-0"
                           >
                             {leader.is_active ? (
                               <PowerOff className="h-4 w-4" />
@@ -214,6 +286,7 @@ export const LeadersTable: React.FC<LeadersTableProps> = ({
                               })
                             }
                             title="Cambiar contraseña"
+                            className="h-8 w-8 p-0"
                           >
                             <Key className="h-4 w-4" />
                           </Button>
