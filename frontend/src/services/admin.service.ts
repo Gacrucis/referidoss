@@ -3,7 +3,8 @@ import type { User, PaginatedResponse } from '../types';
 
 export interface AdminUserFilters {
   search?: string;
-  role?: 'super_admin' | 'leader' | 'member';
+  fuzzy?: boolean;
+  role?: 'super_admin' | 'leader' | 'leader_papa' | 'leader_hijo' | 'leader_lnpro' | 'member';
   is_active?: boolean;
   departamento?: string;
   municipio?: string;

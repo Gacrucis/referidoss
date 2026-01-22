@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import Fuse, { type IFuseOptions } from 'fuse.js';
 import { adminService, type AdminUserFilters, type UserForSelect } from '../services/admin.service';
 import { userService } from '../services/user.service';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,6 +31,7 @@ export const AdminUsersPage: React.FC = () => {
   const [users, setUsers] = useState<PaginatedResponse<User> | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isFuzzySearch, setIsFuzzySearch] = useState(true);
   const [filters, setFilters] = useState<AdminUserFilters>({
     page: 1,
     per_page: 20,
@@ -58,8 +60,53 @@ export const AdminUsersPage: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const data = await adminService.getUsers(filters);
-      setUsers(data);
+      if (filters.fuzzy && filters.search) {
+        // Fetch all users for fuzzy search
+        const allResponse = await adminService.getUsers({ per_page: 10000, fuzzy: false });
+        const allUsers = allResponse.data;
+
+        // Normalize function for Spanish accents and case
+        const normalize = (str: string) => str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+        // Fuse options for fuzzy search specialized in Spanish names
+        const options: IFuseOptions<User> = {
+          keys: [
+            { name: 'nombre_completo', getFn: (user: User) => normalize(user.nombre_completo) },
+            { name: 'cedula', getFn: (user: User) => normalize(user.cedula) },
+            { name: 'celular', getFn: (user: User) => normalize(user.celular) },
+            { name: 'email', getFn: (user: User) => normalize(user.email || '') },
+          ],
+          threshold: 0.3, // Allow more fuzzy matches
+          distance: 100, // Search within 100 characters
+          ignoreLocation: true, // Search anywhere in the string
+          shouldSort: true,
+          includeScore: true,
+        };
+
+        const fuse = new Fuse(allUsers, options);
+        const results = fuse.search(normalize(filters.search));
+        const filteredUsers = results.map(r => r.item);
+
+        // Paginate the results
+        const page = filters.page || 1;
+        const perPage = filters.per_page || 20;
+        const start = (page - 1) * perPage;
+        const end = start + perPage;
+        const paginatedData = filteredUsers.slice(start, end);
+
+        setUsers({
+          data: paginatedData,
+          total: filteredUsers.length,
+          last_page: Math.ceil(filteredUsers.length / perPage),
+          current_page: page,
+          from: filteredUsers.length > 0 ? start + 1 : 0,
+          to: Math.min(end, filteredUsers.length),
+          per_page: perPage,
+        });
+      } else {
+        const data = await adminService.getUsers(filters);
+        setUsers(data);
+      }
     } catch (err) {
       console.error('Error loading users:', err);
     } finally {
@@ -68,7 +115,7 @@ export const AdminUsersPage: React.FC = () => {
   };
 
   const handleSearch = () => {
-    setFilters(prev => ({ ...prev, search: searchQuery, page: 1 }));
+    setFilters(prev => ({ ...prev, search: searchQuery, fuzzy: isFuzzySearch, page: 1 }));
   };
 
   const handleFilterChange = (key: keyof AdminUserFilters, value: any) => {
@@ -221,6 +268,16 @@ export const AdminUsersPage: React.FC = () => {
                 <Button onClick={handleSearch}>
                   <Search className="h-4 w-4" />
                 </Button>
+              </div>
+              <div className="mt-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={isFuzzySearch}
+                    onChange={(e) => setIsFuzzySearch(e.target.checked)}
+                  />
+                  Búsqueda difusa (maneja errores tipográficos y acentos en nombres)
+                </label>
               </div>
             </div>
 
